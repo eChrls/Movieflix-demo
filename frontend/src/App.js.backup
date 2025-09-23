@@ -1,0 +1,1810 @@
+import React, { useState, useEffect } from "react";
+import {
+  Search,
+  Plus,
+  Star,
+  Check,
+  X,
+  Edit,
+  Trash2,
+  Loader2,
+  AlertCircle,
+  WifiOff,
+  ChevronUp,
+  RotateCcw,
+} from "lucide-react";
+import DemoNotice from "./components/DemoNotice";
+import { useDemoMode, DemoProvider } from "./hooks/useDemoMode";
+
+// API_BASE se determinará dinámicamente según el modo
+
+const MovieManager = () => {
+  // State management
+  const [profiles, setProfiles] = useState([]);
+  const [currentProfile, setCurrentProfile] = useState(null);
+  const [content, setContent] = useState([]);
+  const [watchedContent, setWatchedContent] = useState([]);
+  const [platforms, setPlatforms] = useState([]);
+  const [genres, setGenres] = useState([]);
+  const [activeTab, setActiveTab] = useState("pending");
+  const [filters, setFilters] = useState({
+    type: "",
+    platform: "",
+    genre: "",
+    search: "",
+  });
+  const [topContent, setTopContent] = useState({ movies: [], series: [] });
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
+  const [editingContent, setEditingContent] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [error, setError] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [showPlatformMenu, setShowPlatformMenu] = useState(null); // Para el menú de plataformas
+  const [showScrollTop, setShowScrollTop] = useState(false); // Para el botón volver arriba
+  const [topActiveTab, setTopActiveTab] = useState("movies"); // Para las pestañas del Top 3
+  const [searchSuggestions, setSearchSuggestions] = useState([]); // Para sugerencias de búsqueda
+  const [showSuggestions, setShowSuggestions] = useState(false); // Mostrar dropdown de sugerencias
+  const [debounceTimer, setDebounceTimer] = useState(null); // Timer para debounce
+
+  // 🎭 Hook de modo demo
+  const {
+    isDemoMode,
+    demoSession,
+    isAuthenticated: isDemoAuthenticated,
+    authenticateDemo,
+    getApiBase,
+    getDemoCode,
+    checkDemoLimits,
+  } = useDemoMode();
+
+  // 🔒 Sistema de acceso sencillo
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [accessCode, setAccessCode] = useState("");
+  const [accessError, setAccessError] = useState("");
+
+  // 🌐 Sistema de URLs personalizadas por perfil
+  const [urlProfileName, setUrlProfileName] = useState(null);
+  const [directProfileAccess, setDirectProfileAccess] = useState(false);
+
+  const [newContent, setNewContent] = useState({
+    title: "",
+    title_en: "",
+    year: "",
+    type: "movie",
+    rating: "",
+    runtime: "",
+    genres: [],
+    overview: "",
+    poster_path: "",
+    backdrop_path: "",
+    imdb_id: "",
+    tmdb_id: "",
+    platform_id: "",
+  });
+
+  // Network status monitoring
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    const handleClickOutside = (event) => {
+      // Cerrar menú de plataformas si se hace click fuera
+      if (!event.target.closest(".platform-menu-container")) {
+        setShowPlatformMenu(null);
+      }
+      // Cerrar dropdown de sugerencias si se hace click fuera
+      if (!event.target.closest(".search-suggestions-container")) {
+        setShowSuggestions(false);
+      }
+    };
+    const handleScroll = () => {
+      // Mostrar botón volver arriba cuando se hace scroll hacia abajo
+      setShowScrollTop(window.pageYOffset > 300);
+    };
+
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    window.addEventListener("scroll", handleScroll);
+    document.addEventListener("click", handleClickOutside);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+      window.removeEventListener("scroll", handleScroll);
+      document.removeEventListener("click", handleClickOutside);
+    };
+  }, []);
+
+  // API helper with error handling - Soporte para modo demo
+  const apiCall = async (url, options = {}) => {
+    try {
+      // Usar API base dinámica según el modo
+      const API_BASE = getApiBase();
+
+      // Headers adicionales para modo demo
+      const demoHeaders = isDemoMode
+        ? {
+            "X-Demo-Mode": "true",
+            "X-Demo-Session": demoSession?.id || "",
+          }
+        : {};
+
+      const response = await fetch(`${API_BASE}${url}`, {
+        headers: {
+          "Content-Type": "application/json",
+          ...demoHeaders,
+          ...options.headers,
+        },
+        ...options,
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`API Error (${url}):`, error);
+      setError(`Error de conexión: ${error.message}`);
+      throw error;
+    }
+  };
+
+  // Genre parsing helper - handles both JSON and string formats safely
+  const parseGenres = (genresData) => {
+    if (!genresData) return [];
+
+    try {
+      // If it's already an array, return it
+      if (Array.isArray(genresData)) return genresData;
+
+      // If it's a string, try to parse as JSON first
+      if (typeof genresData === "string") {
+        // Check if it looks like JSON (starts with [ or ")
+        if (genresData.startsWith("[") || genresData.startsWith('"')) {
+          return JSON.parse(genresData);
+        }
+        // Otherwise, treat as comma-separated string
+        return genresData
+          .split(",")
+          .map((g) => g.trim())
+          .filter((g) => g);
+      }
+
+      return [];
+    } catch (error) {
+      console.warn("Error parsing genres:", genresData, error);
+      // Fallback: treat as comma-separated string
+      return typeof genresData === "string"
+        ? genresData
+            .split(",")
+            .map((g) => g.trim())
+            .filter((g) => g)
+        : [];
+    }
+  };
+
+  // Load initial data
+  useEffect(() => {
+    const initializeApp = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        await Promise.all([loadProfiles(), loadPlatforms(), loadGenres()]);
+      } catch (error) {
+        setError("Error cargando datos iniciales");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeApp();
+  }, []);
+
+  // 🔒 Verificar acceso y URL al cargar - Con soporte para modo demo
+  useEffect(() => {
+    checkAccess();
+    const profileFromUrl = checkUrlProfile();
+    if (profileFromUrl) {
+      console.log(`🌐 URL Profile detectado: ${profileFromUrl}`);
+    }
+
+    // Log del modo detectado
+    if (isDemoMode) {
+      console.log("🎭 Demo mode activated");
+      console.log(`🔑 Demo code required: ${getDemoCode()}`);
+    } else {
+      console.log("🚀 Production mode");
+    }
+  }, [isDemoMode, isDemoAuthenticated, getDemoCode]);
+
+  useEffect(() => {
+    if (currentProfile) {
+      loadContent();
+      loadTopContent();
+      // Cargar también el contenido visto para tener el conteo actualizado
+      if (activeTab === "pending") {
+        loadWatchedContent();
+      }
+    }
+  }, [currentProfile, filters, activeTab]);
+
+  // 🌐 Selección automática de perfil desde URL
+  useEffect(() => {
+    if (
+      profiles.length > 0 &&
+      urlProfileName &&
+      !currentProfile &&
+      isAuthenticated
+    ) {
+      selectProfileFromUrl();
+    }
+  }, [profiles, urlProfileName, currentProfile, isAuthenticated]);
+
+  // Función para cargar contenido visto
+  const loadWatchedContent = async () => {
+    if (!currentProfile) return;
+
+    try {
+      const params = new URLSearchParams({
+        status: "watched",
+        ...filters,
+      });
+
+      const data = await apiCall(`/content/${currentProfile.id}?${params}`);
+      setWatchedContent(data);
+    } catch (error) {
+      console.error("Error loading watched content:", error);
+    }
+  };
+
+  const loadProfiles = async () => {
+    try {
+      const data = await apiCall("/profiles");
+      setProfiles(data);
+
+      if (data.length > 0 && !currentProfile) {
+        setCurrentProfile(data.find((p) => p.name === "Home") || data[0]);
+      }
+    } catch (error) {
+      console.error("Error loading profiles:", error);
+    }
+  };
+
+  const loadPlatforms = async () => {
+    try {
+      const data = await apiCall("/platforms");
+      setPlatforms(data);
+    } catch (error) {
+      console.error("Error loading platforms:", error);
+    }
+  };
+
+  const loadGenres = async () => {
+    try {
+      const data = await apiCall("/genres");
+      setGenres(data);
+    } catch (error) {
+      console.error("Error loading genres:", error);
+    }
+  };
+
+  const loadContent = async () => {
+    if (!currentProfile) return;
+
+    try {
+      const params = new URLSearchParams({
+        status: activeTab,
+        ...filters,
+      });
+
+      const data = await apiCall(`/content/${currentProfile.id}?${params}`);
+
+      if (activeTab === "pending") {
+        setContent(data);
+      } else {
+        setWatchedContent(data);
+      }
+    } catch (error) {
+      console.error("Error loading content:", error);
+    }
+  };
+
+  // Función para búsqueda mejorada con TMDb API
+  const searchEnhancedAPI = async (title, year, type = "movie") => {
+    if (!title.trim()) return;
+
+    setSearchLoading(true);
+    try {
+      const data = await apiCall(
+        `/search/enhanced?title=${encodeURIComponent(
+          title
+        )}&year=${year}&type=${type}`
+      );
+
+      if (!data.error) {
+        console.log("✅ Datos obtenidos:", data);
+        return {
+          title: data.titleES || title,
+          title_en: data.titleEN || title,
+          year: data.year,
+          rating: data.rating,
+          runtime: data.runtime,
+          genres: data.genres || [],
+          overview: data.overview,
+          poster_path: data.poster_path,
+          backdrop_path: data.backdrop_path,
+          imdb_id: data.imdb_id,
+          tmdb_id: data.tmdb_id,
+          type: type,
+        };
+      } else {
+        console.log("⚠️ No se encontraron datos:", data.error);
+        return null;
+      }
+    } catch (error) {
+      console.error("Error searching enhanced API:", error);
+      return null;
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  // Función para autocompletar solo el rating desde OMDb API con cache
+  const searchMovieRating = async (title, year) => {
+    if (!title || title.length < 3) return null;
+
+    setSearchLoading(true);
+    try {
+      const yearParam = year ? `&year=${year}` : "";
+      const data = await apiCall(
+        `/search?title=${encodeURIComponent(title)}${yearParam}`
+      );
+
+      setSearchLoading(false);
+
+      if (data && data.imdbRating && data.imdbRating !== "N/A") {
+        console.log(
+          `✅ Rating encontrado: ${data.imdbRating}/10 (${
+            data.source || "OMDb"
+          })`
+        );
+        return data.imdbRating;
+      }
+
+      if (data.error) {
+        console.log(`⚠️ ${data.error}`);
+      }
+      return null;
+    } catch (error) {
+      console.error("Error buscando rating:", error);
+      setSearchLoading(false);
+      return null;
+    }
+  };
+
+  // Función para obtener sugerencias de búsqueda con debounce optimizado
+  const getSearchSuggestions = async (query) => {
+    if (!query || query.length < 3) {
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      console.log(`🔍 Buscando sugerencias para: "${query}"`);
+      const data = await apiCall(
+        `/search/suggestions?query=${encodeURIComponent(query)}`
+      );
+
+      if (data && data.results) {
+        setSearchSuggestions(data.results); // Ya limitado a 5 en backend
+        setShowSuggestions(true);
+      } else {
+        setSearchSuggestions([]);
+        setShowSuggestions(false);
+      }
+    } catch (error) {
+      console.error("Error obteniendo sugerencias:", error);
+      setSearchSuggestions([]);
+      setShowSuggestions(false);
+    }
+  };
+
+  // Función con debounce para optimizar llamadas API
+  const handleSearchInputChange = (value) => {
+    setNewContent({
+      ...newContent,
+      title: value,
+    });
+
+    // Limpiar timer anterior si existe
+    if (debounceTimer) {
+      clearTimeout(debounceTimer);
+    }
+
+    // Crear nuevo timer para debounce de 500ms (profesional)
+    const newTimer = setTimeout(() => {
+      getSearchSuggestions(value);
+    }, 500);
+
+    setDebounceTimer(newTimer);
+  };
+
+  // Función para seleccionar una sugerencia y completar el formulario
+  const selectSuggestion = async (suggestion) => {
+    console.log(`✅ Seleccionando: ${suggestion.display_title}`);
+
+    // Cerrar dropdown inmediatamente para mejor UX
+    setShowSuggestions(false);
+    setSearchSuggestions([]);
+
+    // Actualizar formulario con datos básicos de la sugerencia
+    const updatedContent = {
+      ...newContent,
+      title: suggestion.title || suggestion.name,
+      title_en: suggestion.original_title || suggestion.original_name,
+      year: suggestion.year,
+      type: suggestion.media_type === "tv" ? "series" : "movie",
+      tmdb_id: suggestion.id,
+      poster_path: suggestion.poster_path
+        ? `https://image.tmdb.org/t/p/w500${suggestion.poster_path}`
+        : "",
+      backdrop_path: suggestion.backdrop_path
+        ? `https://image.tmdb.org/t/p/w1280${suggestion.backdrop_path}`
+        : "",
+      overview: suggestion.overview || "",
+    };
+
+    setNewContent(updatedContent);
+
+    // Buscar datos adicionales de manera asíncrona (rating, duración, géneros)
+    try {
+      const enhancedData = await searchEnhancedAPI(
+        suggestion.title || suggestion.name,
+        suggestion.year,
+        suggestion.media_type === "tv" ? "series" : "movie"
+      );
+
+      if (enhancedData) {
+        setNewContent((prev) => ({
+          ...prev,
+          rating: enhancedData.rating || prev.rating,
+          runtime: enhancedData.runtime || prev.runtime,
+          genres: enhancedData.genres || prev.genres,
+          imdb_id: enhancedData.imdb_id || prev.imdb_id,
+        }));
+        console.log(
+          `🎯 Datos completos cargados para: ${suggestion.display_title}`
+        );
+      }
+    } catch (error) {
+      console.error("Error cargando datos adicionales:", error);
+      // No es crítico, los datos básicos ya están cargados
+    }
+  };
+
+  // Función para cambiar plataforma
+  const changePlatform = async (contentId, newPlatformId) => {
+    try {
+      await apiCall(`/content/${contentId}`, {
+        method: "PUT",
+        body: JSON.stringify({ platform_id: newPlatformId }),
+      });
+
+      // Recargar contenido para reflejar cambios
+      loadContent();
+      setShowPlatformMenu(null);
+    } catch (error) {
+      console.error("Error cambiando plataforma:", error);
+    }
+  };
+
+  const loadTopContent = async () => {
+    if (!currentProfile) return;
+
+    try {
+      const data = await apiCall(`/content/${currentProfile.id}/top`);
+      setTopContent(data);
+    } catch (error) {
+      console.error("Error loading top content:", error);
+    }
+  };
+
+  const createProfile = async (name, emoji) => {
+    try {
+      const newProfile = await apiCall("/profiles", {
+        method: "POST",
+        body: JSON.stringify({ name, emoji }),
+      });
+
+      setProfiles([...profiles, newProfile]);
+      setCurrentProfile(newProfile);
+      setShowProfileModal(false);
+    } catch (error) {
+      console.error("Error creating profile:", error);
+    }
+  };
+
+  const addContent = async (contentData) => {
+    try {
+      // Verificar si ya existe contenido con el mismo título
+      const existingContent = content.find(
+        (item) =>
+          item.title.toLowerCase() === contentData.title.toLowerCase() ||
+          (item.title_en &&
+            contentData.title_en &&
+            item.title_en.toLowerCase() === contentData.title_en.toLowerCase())
+      );
+
+      const existingWatched = watchedContent.find(
+        (item) =>
+          item.title.toLowerCase() === contentData.title.toLowerCase() ||
+          (item.title_en &&
+            contentData.title_en &&
+            item.title_en.toLowerCase() === contentData.title_en.toLowerCase())
+      );
+
+      if (existingContent) {
+        setError(
+          `La ${contentData.type === "movie" ? "película" : "serie"} "${
+            contentData.title
+          }" ya está en tu lista de pendientes.`
+        );
+        return;
+      }
+
+      if (existingWatched) {
+        setError(
+          `La ${contentData.type === "movie" ? "película" : "serie"} "${
+            contentData.title
+          }" ya está en tu lista de vistas.`
+        );
+        return;
+      }
+
+      const newContent = await apiCall("/content", {
+        method: "POST",
+        body: JSON.stringify({ ...contentData, profile_id: currentProfile.id }),
+      });
+
+      setContent([newContent, ...content]);
+      loadTopContent();
+      setError(null); // Limpiar error si todo salió bien
+    } catch (error) {
+      console.error("Error adding content:", error);
+      setError("Error al añadir el contenido. Inténtalo de nuevo.");
+    }
+  };
+
+  const updateContent = async (id, contentData) => {
+    try {
+      const updatedContent = await apiCall(`/content/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(contentData),
+      });
+
+      setContent(content.map((c) => (c.id === id ? updatedContent : c)));
+      loadTopContent();
+    } catch (error) {
+      console.error("Error updating content:", error);
+    }
+  };
+
+  const markAsWatched = async (id) => {
+    try {
+      await apiCall(`/content/${id}/watch`, { method: "PATCH" });
+      setContent(content.filter((c) => c.id !== id));
+      loadTopContent();
+      loadContent();
+    } catch (error) {
+      console.error("Error marking as watched:", error);
+    }
+  };
+
+  const markAsPending = async (id) => {
+    try {
+      await apiCall(`/content/${id}/unwatch`, { method: "PATCH" });
+      setWatchedContent(watchedContent.filter((c) => c.id !== id));
+      loadTopContent();
+      loadContent();
+    } catch (error) {
+      console.error("Error marking as pending:", error);
+    }
+  };
+
+  const deleteContent = async (id) => {
+    try {
+      await apiCall(`/content/${id}`, { method: "DELETE" });
+      setContent(content.filter((c) => c.id !== id));
+      setWatchedContent(watchedContent.filter((c) => c.id !== id));
+      loadTopContent();
+    } catch (error) {
+      console.error("Error deleting content:", error);
+    }
+  };
+
+  // 🔒 Funciones de acceso con soporte para modo demo
+  const checkAccess = () => {
+    // En modo demo, verificar autenticación demo
+    if (isDemoMode) {
+      setIsAuthenticated(isDemoAuthenticated);
+      return;
+    }
+
+    // Modo producción - autenticación tradicional
+    const accessData = localStorage.getItem("movieflix_access");
+    if (accessData) {
+      try {
+        const { granted, timestamp } = JSON.parse(accessData);
+        const thirtyDays = 30 * 24 * 60 * 60 * 1000; // 30 días en ms
+        const now = Date.now();
+
+        if (granted && now - timestamp < thirtyDays) {
+          setIsAuthenticated(true);
+          return;
+        }
+      } catch (e) {
+        // Si hay error parseando, limpiar localStorage
+        localStorage.removeItem("movieflix_access");
+      }
+    }
+    // Si no hay acceso válido, mantener isAuthenticated como false
+  };
+
+  const handleAccessSubmit = (e) => {
+    e.preventDefault();
+
+    // Código específico para modo demo
+    if (isDemoMode && accessCode === getDemoCode()) {
+      const success = authenticateDemo(accessCode);
+      if (success) {
+        setIsAuthenticated(true);
+        setAccessCode("");
+        setAccessError("");
+        console.log("🎭 Demo mode authenticated successfully");
+      } else {
+        setAccessError("Error en autenticación demo");
+        setAccessCode("");
+      }
+      return;
+    }
+
+    // Código para modo producción
+    if (!isDemoMode && accessCode === "5202") {
+      const accessData = {
+        granted: true,
+        timestamp: Date.now(),
+      };
+      localStorage.setItem("movieflix_access", JSON.stringify(accessData));
+      setIsAuthenticated(true);
+      setAccessCode("");
+      setAccessError("");
+    } else {
+      setAccessError("Código incorrecto");
+      setAccessCode("");
+    }
+  };
+
+  // 🌐 Sistema de URLs personalizadas por perfil
+  const checkUrlProfile = () => {
+    const urlParams = new URL(window.location.href).searchParams;
+    const profileParam = urlParams.get("profile");
+
+    if (profileParam) {
+      setUrlProfileName(profileParam);
+      setDirectProfileAccess(true);
+      return profileParam;
+    }
+    return null;
+  };
+
+  const updateUrlWithProfile = (profileName) => {
+    if (!profileName) return;
+
+    const url = new URL(window.location.href);
+    url.searchParams.set("profile", encodeURIComponent(profileName));
+
+    // Actualizar URL sin recargar la página
+    window.history.replaceState({}, "", url.toString());
+  };
+
+  const clearUrlProfile = () => {
+    const url = new URL(window.location.href);
+    url.searchParams.delete("profile");
+    window.history.replaceState({}, "", url.toString());
+    setUrlProfileName(null);
+    setDirectProfileAccess(false);
+  };
+
+  const selectProfileFromUrl = async () => {
+    if (!urlProfileName || !profiles.length) return;
+
+    // Buscar perfil por nombre (case insensitive)
+    const targetProfile = profiles.find(
+      (profile) => profile.name.toLowerCase() === urlProfileName.toLowerCase()
+    );
+
+    if (targetProfile) {
+      setCurrentProfile(targetProfile);
+      setDirectProfileAccess(true);
+      console.log(`🌐 Perfil seleccionado desde URL: ${targetProfile.name}`);
+    } else {
+      console.warn(`⚠️ Perfil '${urlProfileName}' no encontrado en URL`);
+      clearUrlProfile();
+    }
+  };
+
+  const searchExternalAPI = async (title, year) => {
+    if (!title.trim()) return;
+
+    setSearchLoading(true);
+    try {
+      const data = await apiCall(
+        `/search?title=${encodeURIComponent(title)}&year=${year}`
+      );
+      if (!data.error) {
+        setNewContent({
+          ...newContent,
+          ...data,
+        });
+      }
+    } catch (error) {
+      console.error("Error searching external API:", error);
+    } finally {
+      setSearchLoading(false);
+    }
+  };
+
+  const filteredContent = (
+    activeTab === "pending" ? content : watchedContent
+  ).filter((item) => {
+    // Debug logging
+    if (filters.platform) {
+      console.log(
+        "Filtering by platform:",
+        filters.platform,
+        "Item platform_id:",
+        item.platform_id,
+        "Parsed:",
+        parseInt(filters.platform)
+      );
+    }
+
+    if (
+      filters.search &&
+      !item.title.toLowerCase().includes(filters.search.toLowerCase())
+    ) {
+      return false;
+    }
+    if (filters.type && item.type !== filters.type) return false;
+    if (filters.platform && item.platform_id !== parseInt(filters.platform))
+      return false;
+    if (
+      filters.genre &&
+      !parseGenres(item.genres || "[]").includes(filters.genre)
+    )
+      return false;
+    return true;
+  });
+
+  // Platform color mapping - Updated per user specifications
+  const getPlatformColor = (platformName) => {
+    const colors = {
+      Netflix: "#E50914",
+      HBO: "#9B59B6",
+      "Prime Video": "#00A8E1",
+      "Apple TV+": "#000000",
+      "Disney+": "#113CCF",
+      SkyShowtime: "#0064FF",
+      "Movistar+": "#00B7ED",
+      Filmin: "#10B981", // 🟢 VERDE - Como solicitado
+      APK: "#FF8500", // 🟠 NARANJA - Como solicitado
+      // Shudder y Criterion Channel removidos como solicitado
+    };
+    return colors[platformName] || "#333333";
+  };
+
+  // Función para scroll hacia arriba
+  const scrollToTop = () => {
+    window.scrollTo({
+      top: 0,
+      behavior: "smooth",
+    });
+  };
+
+  // Components
+  const LoadingSpinner = () => (
+    <div className="flex items-center justify-center p-8">
+      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-red-600"></div>
+    </div>
+  );
+
+  const ScrollToTopButton = () => (
+    <button
+      onClick={scrollToTop}
+      className={`fixed bottom-4 right-4 bg-red-600 hover:bg-red-700 text-white p-3 rounded-full shadow-lg transition-all duration-300 z-50 ${
+        showScrollTop
+          ? "opacity-100 translate-y-0"
+          : "opacity-0 translate-y-4 pointer-events-none"
+      }`}
+      title="Volver arriba"
+      aria-label="Volver arriba"
+    >
+      <ChevronUp size={20} />
+    </button>
+  );
+
+  const ContentCard = ({ item, isWatched = false }) => (
+    <div className="bg-gray-card rounded-lg border border-gray-700 overflow-hidden hover:border-netflix-dark hover:shadow-lg transition-all duration-300 group font-maven">
+      {/* Poster Section - Más rectangular y alargado */}
+      <div className="relative">
+        {item.poster_path ? (
+          <img
+            src={item.poster_path}
+            alt={item.title}
+            className="w-full h-40 sm:h-48 object-cover bg-gray-800"
+            loading="lazy"
+            onError={(e) => {
+              // Fallback si la imagen no carga
+              e.target.style.display = "none";
+              e.target.nextSibling.style.display = "flex";
+            }}
+          />
+        ) : null}
+
+        {/* Fallback cuando no hay poster */}
+        <div
+          className={`w-full h-40 sm:h-48 bg-gray-800 flex items-center justify-center ${
+            item.poster_path ? "hidden" : "flex"
+          }`}
+        >
+          <span className="text-6xl">
+            {item.type === "series" ? "📺" : "🎬"}
+          </span>
+        </div>
+
+        {/* Rating badge overlay */}
+        {item.rating && (
+          <div className="absolute top-2 right-2 bg-yellow-600 text-yellow-100 px-2 py-1 rounded-lg text-xs font-bold flex items-center gap-1 font-tech">
+            <Star size={12} fill="currentColor" />
+            {item.rating}
+          </div>
+        )}
+
+        {/* Action buttons overlay - Mejorados para móvil */}
+        <div className="absolute top-2 left-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          {!isWatched && (
+            <button
+              onClick={() => markAsWatched(item.id)}
+              className="bg-green-600 hover:bg-green-700 text-white p-3 sm:p-2 rounded-lg transition-colors shadow-lg"
+              title="Marcar como visto"
+              aria-label="Marcar como visto"
+            >
+              <Check size={16} className="sm:w-4 sm:h-4" />
+            </button>
+          )}
+          {isWatched && (
+            <button
+              onClick={() => markAsPending(item.id)}
+              className="bg-orange-600 hover:bg-orange-700 text-white p-3 sm:p-2 rounded-lg transition-colors shadow-lg"
+              title="Volver a pendientes"
+              aria-label="Volver a pendientes"
+            >
+              <RotateCcw size={16} className="sm:w-4 sm:h-4" />
+            </button>
+          )}
+          <button
+            onClick={() => {
+              setEditingContent(item);
+              setNewContent({
+                title: item.title,
+                title_en: item.title_en,
+                year: item.year,
+                type: item.type,
+                rating: item.rating,
+                runtime: item.runtime,
+                genres: parseGenres(item.genres || "[]"),
+                overview: item.overview,
+                poster_path: item.poster_path,
+                backdrop_path: item.backdrop_path,
+                imdb_id: item.imdb_id,
+                tmdb_id: item.tmdb_id,
+                platform_id: item.platform_id,
+              });
+              setShowAddModal(true);
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white p-3 sm:p-2 rounded-lg transition-colors shadow-lg"
+            title="Editar"
+            aria-label="Editar"
+          >
+            <Edit size={16} className="sm:w-4 sm:h-4" />
+          </button>
+          <button
+            onClick={() => deleteContent(item.id)}
+            className="bg-netflix-darker hover:bg-netflix text-white p-3 sm:p-2 rounded-lg transition-colors shadow-lg"
+            title="Eliminar"
+            aria-label="Eliminar"
+          >
+            <Trash2 size={16} className="sm:w-4 sm:h-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="p-3">
+        <div className="mb-2">
+          <div>
+            <h3
+              className="text-white font-semibold text-sm sm:text-base mb-1 leading-relaxed font-maven break-words"
+              title={item.title}
+            >
+              {item.title}
+            </h3>
+            {item.title_en && item.title_en !== item.title && (
+              <p
+                className="text-gray-400 text-xs mb-1 leading-relaxed font-maven break-words"
+                title={item.title_en}
+              >
+                {item.title_en}
+              </p>
+            )}
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="text-gray-400 text-xs font-tech">
+                {item.year}
+              </span>
+              {item.runtime && (
+                <span className="text-gray-400 text-xs font-tech">
+                  {item.runtime} min
+                </span>
+              )}
+              {/* Temporadas y episodios para series */}
+              {item.type === "series" && item.seasons && (
+                <span className="text-gray-400 text-xs font-tech">
+                  {item.seasons} temp.
+                </span>
+              )}
+              {item.type === "series" && item.episodes && (
+                <span className="text-gray-400 text-xs font-tech">
+                  {item.episodes} ep.
+                </span>
+              )}
+              {/* IMDb link */}
+              {item.imdb_id && (
+                <a
+                  href={`https://www.imdb.com/title/${item.imdb_id}/`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-yellow-400 hover:text-yellow-300 transition-colors"
+                  title="Ver en IMDb"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <span className="text-xs font-tech">IMDb</span>
+                </a>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Platform - Solo muestra la etiqueta, sin funcionalidad de click */}
+        {item.platform_name && (
+          <div className="mb-3">
+            <span
+              className="inline-flex items-center gap-1 px-2 py-1 rounded text-xs text-white font-medium"
+              style={{
+                backgroundColor:
+                  item.platform_color || getPlatformColor(item.platform_name),
+              }}
+              title={item.platform_name}
+            >
+              {item.platform_icon} {item.platform_name}
+            </span>
+          </div>
+        )}
+
+        {item.genres && parseGenres(item.genres).length > 0 && (
+          <div className="flex flex-wrap gap-1 mt-2">
+            {parseGenres(item.genres)
+              .slice(0, 3)
+              .map((genre) => {
+                const genreObj = genres.find((g) => g.name === genre);
+                return (
+                  <span
+                    key={genre}
+                    className="bg-gray-800 text-gray-400 px-2 py-1 rounded text-xs border border-gray-700"
+                  >
+                    {genreObj?.icon} {genre}
+                  </span>
+                );
+              })}
+            {parseGenres(item.genres).length > 3 && (
+              <span className="bg-gray-800 text-gray-500 px-2 py-1 rounded text-xs border border-gray-700">
+                +{parseGenres(item.genres).length - 3}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  const TopCard = ({ item, rank }) => (
+    <div className="relative bg-gradient-to-br from-netflix-darker to-gray-card rounded-md p-1.5 border border-netflix-dark hover:border-netflix transition-all duration-300 group font-maven">
+      <div className="absolute -top-1 -left-1 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-full w-4 h-4 flex items-center justify-center font-bold text-xs shadow-lg font-tech">
+        {rank}
+      </div>
+      <h3 className="text-white font-medium text-xs mb-1 pr-3 font-maven leading-tight break-words">
+        {item.title}
+      </h3>
+      <div className="flex items-center gap-1 text-xs mb-0.5">
+        <span className="bg-yellow-600 text-yellow-100 px-1 py-0.5 rounded text-xs font-medium flex items-center gap-0.5 font-tech">
+          <Star size={6} fill="currentColor" />
+          {item.rating}
+        </span>
+        <span className="text-gray-300 font-maven text-xs">{item.year}</span>
+        <span className="text-xs">{item.type === "series" ? "📺" : "🎬"}</span>
+      </div>
+      {/* Duración y temporadas/episodios */}
+      <div className="flex items-center gap-1.5 text-xs text-gray-400 font-maven">
+        {item.runtime && <span>{item.runtime}min</span>}
+        {item.type === "series" && item.seasons && <span>{item.seasons}T</span>}
+        {item.type === "series" && item.episodes && (
+          <span>{item.episodes}E</span>
+        )}
+      </div>
+    </div>
+  );
+
+  // Error state
+  if (error && !isOnline) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="text-center">
+          <WifiOff size={64} className="text-red-600 mx-auto mb-4" />
+          <h1 className="text-2xl font-bold text-white mb-2">Sin conexión</h1>
+          <p className="text-gray-400 mb-4">Verifica tu conexión a internet</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="bg-red-600 hover:bg-red-700 px-6 py-2 rounded text-white font-medium"
+          >
+            Reintentar
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // 🔒 Verificación de acceso
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col">
+        {/* Banner demo - Solo mostrar en modo demo */}
+        {isDemoMode && <DemoNotice />}
+
+        <div className="flex-1 flex items-center justify-center">
+          <div className="bg-gray-900 p-8 rounded-lg shadow-2xl max-w-md w-full mx-4">
+            <div className="text-center mb-6">
+              <h1 className="text-3xl font-bold text-netflix mb-2">
+                🎬 {isDemoMode ? "MovieFlix Demo" : "MovieFlix"}
+              </h1>
+              <p className="text-gray-300">
+                {isDemoMode
+                  ? `Introduce el código: "${getDemoCode()}"`
+                  : "Introduce el código de acceso"}
+              </p>
+              {isDemoMode && (
+                <div className="mt-3 p-3 bg-blue-900/30 border border-blue-700 rounded-lg">
+                  <p className="text-blue-300 text-sm">
+                    🎭 Modo demostración - Datos temporales
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <form onSubmit={handleAccessSubmit} className="space-y-4">
+              <div>
+                <input
+                  type="password"
+                  value={accessCode}
+                  onChange={(e) => setAccessCode(e.target.value)}
+                  placeholder="Código de acceso"
+                  className="w-full px-4 py-3 bg-gray-800 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-netflix"
+                  autoFocus
+                />
+              </div>
+
+              {accessError && (
+                <p className="text-red-500 text-sm text-center">
+                  {accessError}
+                </p>
+              )}
+
+              <button
+                type="submit"
+                className="w-full bg-netflix hover:bg-red-700 text-white py-3 px-4 rounded-lg transition-colors font-medium"
+              >
+                Acceder
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-red-600 mx-auto mb-4"></div>
+          <h1 className="text-2xl font-bold text-netflix mb-2 font-maven">
+            MovieFlix
+          </h1>
+          <p className="text-white">Cargando tu gestor personal...</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-carbon text-white font-maven">
+      {/* 🎭 Banner Demo (solo aparece en modo demo) */}
+      <DemoNotice />
+
+      {/* Header */}
+      <header className="bg-gray-950 border-b border-gray-700 sticky top-0 z-40 backdrop-blur-sm">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex flex-col lg:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => {
+                  clearUrlProfile();
+                  window.location.reload();
+                }}
+                className="text-3xl font-bold text-netflix flex items-center gap-2 font-maven hover:text-red-400 transition-colors cursor-pointer"
+                title="Recargar página y volver al inicio"
+                aria-label="Recargar página y volver al inicio"
+              >
+                🎬 MovieFlix
+              </button>
+              <div className="flex items-center gap-2">
+                <select
+                  value={currentProfile?.id || ""}
+                  onChange={(e) => {
+                    const selectedProfile = profiles.find(
+                      (p) => p.id === parseInt(e.target.value)
+                    );
+                    setCurrentProfile(selectedProfile);
+                    if (selectedProfile) {
+                      updateUrlWithProfile(selectedProfile.name);
+                    }
+                  }}
+                  className="bg-gray-card border border-gray-600 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-netflix transition-colors font-maven"
+                >
+                  {profiles.map((profile) => (
+                    <option key={profile.id} value={profile.id}>
+                      {profile.emoji} {profile.name}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  onClick={() => setShowProfileModal(true)}
+                  className="bg-netflix hover:bg-netflix-dark px-3 py-2 rounded-lg text-sm font-medium transition-colors font-maven"
+                >
+                  + Perfil
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-4 w-full lg:w-auto">
+              <div className="relative flex-1 lg:flex-initial">
+                <Search
+                  size={20}
+                  className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                />
+                <input
+                  type="text"
+                  placeholder="Buscar películas y series..."
+                  value={filters.search}
+                  onChange={(e) =>
+                    setFilters({ ...filters, search: e.target.value })
+                  }
+                  className="bg-gray-800 border border-gray-700 rounded-full pl-10 pr-4 py-2 focus:outline-none focus:border-red-600 transition-colors w-full lg:w-64"
+                />
+              </div>
+              <button
+                onClick={() => {
+                  setEditingContent(null);
+                  setNewContent({
+                    title: "",
+                    year: "",
+                    type: "movie",
+                    rating: "",
+                    genres: [],
+                    platform_id: "",
+                  });
+                  setShowAddModal(true);
+                }}
+                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded-lg flex items-center gap-2 font-medium transition-colors whitespace-nowrap"
+              >
+                <Plus size={20} />
+                <span className="hidden sm:inline">Añadir</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 py-6">
+        {/* Top Content - Rediseñado más compacto */}
+        {activeTab === "pending" &&
+          (topContent.movies.length > 0 || topContent.series.length > 0) && (
+            <section className="mb-6">
+              <h2 className="text-xl font-bold mb-4 text-netflix flex items-center gap-2 font-maven">
+                🏆 Top 3
+              </h2>
+
+              {/* Pestañas */}
+              <div className="flex mb-4 bg-gray-card rounded-lg p-1 w-fit">
+                <button
+                  onClick={() => setTopActiveTab("movies")}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 font-maven ${
+                    topActiveTab === "movies"
+                      ? "bg-netflix text-white shadow-md"
+                      : "text-gray-300 hover:text-white hover:bg-gray-700"
+                  }`}
+                >
+                  🎬 Películas
+                </button>
+                <button
+                  onClick={() => setTopActiveTab("series")}
+                  className={`px-4 py-2 rounded-md text-sm font-medium transition-all duration-200 font-maven ${
+                    topActiveTab === "series"
+                      ? "bg-netflix text-white shadow-md"
+                      : "text-gray-300 hover:text-white hover:bg-gray-700"
+                  }`}
+                >
+                  📺 Series
+                </button>
+              </div>
+
+              {/* Contenido de las pestañas */}
+              <div className="grid gap-4">
+                {topActiveTab === "movies" && topContent.movies.length > 0 && (
+                  <>
+                    {topContent.movies.map((movie, index) => (
+                      <TopCard key={movie.id} item={movie} rank={index + 1} />
+                    ))}
+                  </>
+                )}
+                {topActiveTab === "series" && topContent.series.length > 0 && (
+                  <>
+                    {topContent.series.map((series, index) => (
+                      <TopCard key={series.id} item={series} rank={index + 1} />
+                    ))}
+                  </>
+                )}
+              </div>
+            </section>
+          )}
+
+        {/* Tabs */}
+        <div className="flex gap-1 mb-6 bg-gray-900 p-1 rounded-lg">
+          <button
+            onClick={() => setActiveTab("pending")}
+            className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
+              activeTab === "pending"
+                ? "bg-red-600 text-white"
+                : "text-gray-400 hover:text-white hover:bg-gray-800"
+            }`}
+          >
+            📋 Pendientes ({content.length})
+          </button>
+          <button
+            onClick={() => setActiveTab("watched")}
+            className={`flex-1 py-3 px-4 rounded-lg font-medium transition-all ${
+              activeTab === "watched"
+                ? "bg-green-600 text-white"
+                : "text-gray-400 hover:text-white hover:bg-gray-800"
+            }`}
+          >
+            ✅ Vistas ({watchedContent.length})
+          </button>
+        </div>
+
+        {/* Filters */}
+        <div className="bg-gray-900 p-4 rounded-lg mb-6 border border-gray-800">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <select
+              value={filters.type}
+              onChange={(e) => setFilters({ ...filters, type: e.target.value })}
+              className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-600 transition-colors"
+            >
+              <option value="">🎭 Todos los tipos</option>
+              <option value="movie">🎬 Películas</option>
+              <option value="series">📺 Series</option>
+            </select>
+
+            <select
+              value={filters.platform}
+              onChange={(e) =>
+                setFilters({ ...filters, platform: e.target.value })
+              }
+              className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-600 transition-colors"
+            >
+              <option value="">📱 Todas las plataformas</option>
+              {platforms.map((platform) => (
+                <option key={platform.id} value={platform.id}>
+                  {platform.icon} {platform.name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={filters.genre}
+              onChange={(e) =>
+                setFilters({ ...filters, genre: e.target.value })
+              }
+              className="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-600 transition-colors"
+            >
+              <option value="">🎨 Todos los géneros</option>
+              {genres.map((genre) => (
+                <option key={genre.id} value={genre.name}>
+                  {genre.icon} {genre.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Content Grid - Optimizado para móvil con altura uniforme */}
+        {filteredContent.length > 0 ? (
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 sm:gap-4">
+            {filteredContent.map((item) => (
+              <ContentCard
+                key={item.id}
+                item={item}
+                isWatched={activeTab === "watched"}
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-16">
+            <div className="text-6xl mb-4">
+              {activeTab === "pending" ? "🎬" : "✅"}
+            </div>
+            <h3 className="text-xl font-semibold mb-2">
+              {activeTab === "pending"
+                ? "No hay contenido pendiente"
+                : "No has visto nada aún"}
+            </h3>
+            <p className="text-gray-400 mb-6">
+              {activeTab === "pending"
+                ? "Añade películas y series a tu lista para empezar"
+                : "Marca algo como visto para que aparezca aquí"}
+            </p>
+            {activeTab === "pending" && (
+              <button
+                onClick={() => {
+                  setEditingContent(null);
+                  setNewContent({
+                    title: "",
+                    year: "",
+                    type: "movie",
+                    rating: "",
+                    genres: [],
+                    platform_id: "",
+                  });
+                  setShowAddModal(true);
+                }}
+                className="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg font-medium transition-colors"
+              >
+                Añadir tu primera película o serie
+              </button>
+            )}
+          </div>
+        )}
+      </main>
+
+      {/* Add/Edit Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-900 rounded-lg border border-gray-800 shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <div className="p-6">
+              <h2 className="text-xl font-bold mb-4 text-white">
+                {editingContent ? "Editar contenido" : "Añadir contenido"}
+              </h2>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (editingContent) {
+                    updateContent(editingContent.id, newContent);
+                    setEditingContent(null);
+                  } else {
+                    addContent(newContent);
+                  }
+                  setShowAddModal(false);
+                  setNewContent({
+                    title: "",
+                    year: "",
+                    type: "movie",
+                    rating: "",
+                    genres: [],
+                    platform_id: "",
+                  });
+                }}
+              >
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-300">
+                      Título *
+                    </label>
+                    <div className="flex gap-2">
+                      <div className="flex-1 relative search-suggestions-container">
+                        <input
+                          type="text"
+                          value={newContent.title}
+                          onChange={(e) =>
+                            handleSearchInputChange(e.target.value)
+                          }
+                          onFocus={() => {
+                            if (searchSuggestions.length > 0) {
+                              setShowSuggestions(true);
+                            }
+                          }}
+                          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition-colors"
+                          placeholder="Escribe el título de la película o serie..."
+                          required
+                        />
+
+                        {/* Dropdown de sugerencias */}
+                        {showSuggestions && searchSuggestions.length > 0 && (
+                          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-gray-900 border border-gray-700 rounded-lg shadow-xl max-h-60 overflow-y-auto">
+                            {searchSuggestions.map((suggestion, index) => (
+                              <div
+                                key={`${suggestion.id}-${suggestion.media_type}`}
+                                onClick={() => selectSuggestion(suggestion)}
+                                className="px-4 py-3 hover:bg-gray-800 cursor-pointer border-b border-gray-700 last:border-b-0 transition-colors"
+                              >
+                                <div className="flex items-center gap-3">
+                                  {suggestion.poster_path ? (
+                                    <img
+                                      src={`https://image.tmdb.org/t/p/w92${suggestion.poster_path}`}
+                                      alt={suggestion.display_title}
+                                      className="w-8 h-12 object-cover rounded"
+                                    />
+                                  ) : (
+                                    <div className="w-8 h-12 bg-gray-700 rounded flex items-center justify-center">
+                                      {suggestion.media_type === "tv"
+                                        ? "📺"
+                                        : "🎬"}
+                                    </div>
+                                  )}
+                                  <div className="flex-1 min-w-0">
+                                    <div className="font-medium text-white truncate">
+                                      {suggestion.display_title}
+                                    </div>
+                                    <div className="text-sm text-gray-400 mt-1">
+                                      {suggestion.media_type === "tv"
+                                        ? "Serie"
+                                        : "Película"}
+                                      {suggestion.year &&
+                                        ` • ${suggestion.year}`}
+                                    </div>
+                                    {suggestion.overview && (
+                                      <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                                        {suggestion.overview.length > 80
+                                          ? `${suggestion.overview.substring(
+                                              0,
+                                              80
+                                            )}...`
+                                          : suggestion.overview}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const data = await searchEnhancedAPI(
+                            newContent.title,
+                            newContent.year,
+                            newContent.type
+                          );
+                          if (data) {
+                            setNewContent({
+                              ...newContent,
+                              ...data,
+                            });
+                          }
+                        }}
+                        disabled={!newContent.title || searchLoading}
+                        className="bg-green-600 hover:bg-green-700 disabled:bg-gray-600 px-3 py-2 rounded-lg transition-colors flex items-center gap-1"
+                        title="Autocompletar información completa"
+                      >
+                        {searchLoading ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <>
+                            🔍<span className="hidden sm:inline">Auto</span>
+                          </>
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const rating = await searchMovieRating(
+                            newContent.title,
+                            newContent.year
+                          );
+                          if (rating) {
+                            setNewContent({
+                              ...newContent,
+                              rating: rating,
+                            });
+                          }
+                        }}
+                        disabled={!newContent.title || searchLoading}
+                        className="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-3 py-2 rounded-lg transition-colors flex items-center"
+                        title="Buscar rating IMDb automático"
+                      >
+                        {searchLoading ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          "⭐"
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-gray-300">
+                        Año
+                      </label>
+                      <input
+                        type="number"
+                        value={newContent.year}
+                        onChange={(e) =>
+                          setNewContent({ ...newContent, year: e.target.value })
+                        }
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition-colors"
+                        min="1900"
+                        max="2030"
+                        placeholder="2024"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium mb-2 text-gray-300">
+                        Tipo
+                      </label>
+                      <select
+                        value={newContent.type}
+                        onChange={(e) =>
+                          setNewContent({ ...newContent, type: e.target.value })
+                        }
+                        className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-600 transition-colors"
+                      >
+                        <option value="movie">🎬 Película</option>
+                        <option value="series">📺 Serie</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-300">
+                      Calificación IMDb
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0"
+                      max="10"
+                      value={newContent.rating}
+                      onChange={(e) =>
+                        setNewContent({ ...newContent, rating: e.target.value })
+                      }
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition-colors"
+                      placeholder="8.5"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-300">
+                      Plataforma
+                    </label>
+                    <select
+                      value={newContent.platform_id}
+                      onChange={(e) =>
+                        setNewContent({
+                          ...newContent,
+                          platform_id: e.target.value,
+                        })
+                      }
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white focus:outline-none focus:border-red-600 transition-colors"
+                    >
+                      <option value="">Seleccionar plataforma</option>
+                      {platforms.map((platform) => (
+                        <option key={platform.id} value={platform.id}>
+                          {platform.icon} {platform.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-300">
+                      Géneros
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto bg-gray-800 border border-gray-700 rounded-lg p-3">
+                      {genres.map((genre) => (
+                        <label
+                          key={genre.id}
+                          className="flex items-center gap-2 text-sm cursor-pointer hover:bg-gray-700 p-1 rounded"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={newContent.genres.includes(genre.name)}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setNewContent({
+                                  ...newContent,
+                                  genres: [...newContent.genres, genre.name],
+                                });
+                              } else {
+                                setNewContent({
+                                  ...newContent,
+                                  genres: newContent.genres.filter(
+                                    (g) => g !== genre.name
+                                  ),
+                                });
+                              }
+                            }}
+                            className="rounded text-red-600 focus:ring-red-600"
+                          />
+                          <span className="text-white">
+                            {genre.icon} {genre.name}
+                          </span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-red-600 hover:bg-red-700 py-3 rounded-lg font-medium text-white transition-colors"
+                  >
+                    {editingContent ? "Actualizar" : "Añadir"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowAddModal(false);
+                      setEditingContent(null);
+                      setNewContent({
+                        title: "",
+                        year: "",
+                        type: "movie",
+                        rating: "",
+                        genres: [],
+                        platform_id: "",
+                      });
+                    }}
+                    className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-lg font-medium text-white transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Profile Modal */}
+      {showProfileModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-75 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-gray-900 rounded-lg border border-gray-800 shadow-2xl w-full max-w-sm">
+            <div className="p-6">
+              <h2 className="text-xl font-bold mb-4 text-white">
+                Crear perfil
+              </h2>
+
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  const formData = new FormData(e.target);
+                  createProfile(formData.get("name"), formData.get("emoji"));
+                }}
+              >
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-300">
+                      Nombre *
+                    </label>
+                    <input
+                      name="name"
+                      type="text"
+                      required
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition-colors"
+                      placeholder="Mi perfil"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium mb-2 text-gray-300">
+                      Emoji
+                    </label>
+                    <input
+                      name="emoji"
+                      type="text"
+                      maxLength="2"
+                      className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-white placeholder-gray-500 focus:outline-none focus:border-red-600 transition-colors"
+                      placeholder="🎬"
+                      defaultValue="🎬"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="submit"
+                    className="flex-1 bg-red-600 hover:bg-red-700 py-3 rounded-lg font-medium text-white transition-colors"
+                  >
+                    Crear
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowProfileModal(false)}
+                    className="flex-1 bg-gray-700 hover:bg-gray-600 py-3 rounded-lg font-medium text-white transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Error Toast */}
+      {error && (
+        <div className="fixed bottom-4 left-4 bg-red-600 text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 max-w-md">
+          <AlertCircle size={20} />
+          <span className="flex-1">{error}</span>
+          <button
+            onClick={() => setError(null)}
+            className="text-white hover:text-gray-200"
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      {/* Botón volver arriba */}
+      <ScrollToTopButton />
+    </div>
+  );
+};
+
+// Wrapper del componente con DemoProvider
+const App = () => {
+  return (
+    <DemoProvider>
+      <MovieManager />
+    </DemoProvider>
+  );
+};
+
+export default App;

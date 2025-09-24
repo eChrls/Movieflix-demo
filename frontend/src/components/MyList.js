@@ -1,7 +1,6 @@
 import {
   Bookmark,
   Calendar,
-  Clock,
   Eye,
   Filter,
   Play,
@@ -48,11 +47,11 @@ const MyList = ({ currentProfile, isDemoMode }) => {
       if (response.success) {
         setWatchedContent(response.data);
       } else {
-        setError(response.message || "Error al cargar el contenido");
+        setError("Error al cargar el contenido");
       }
     } catch (err) {
       console.error("Error loading watched content:", err);
-      setError("Error al cargar tu lista personal");
+      setError("Error de conexión");
     } finally {
       setLoading(false);
     }
@@ -67,9 +66,8 @@ const MyList = ({ currentProfile, isDemoMode }) => {
       filtered = filtered.filter(
         (item) =>
           item.title.toLowerCase().includes(searchTerm) ||
-          item.description.toLowerCase().includes(searchTerm) ||
-          item.platform.toLowerCase().includes(searchTerm) ||
-          item.genre.toLowerCase().includes(searchTerm)
+          item.genre.toLowerCase().includes(searchTerm) ||
+          item.platform.toLowerCase().includes(searchTerm)
       );
     }
 
@@ -85,7 +83,7 @@ const MyList = ({ currentProfile, isDemoMode }) => {
       );
     }
 
-    // Sort
+    // Sorting
     filtered.sort((a, b) => {
       switch (filters.sortBy) {
         case "title":
@@ -158,60 +156,51 @@ const MyList = ({ currentProfile, isDemoMode }) => {
     }
   };
 
-  const getStatusIcon = (status) => {
-    switch (status) {
-      case "watched":
-        return <Eye size={14} />;
-      case "watching":
-        return <Clock size={14} />;
-      default:
-        return <Bookmark size={14} />;
-    }
-  };
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "watched":
-        return "#22c55e";
-      case "watching":
-        return "#f59e0b";
-      default:
-        return "#6b7280";
-    }
-  };
-
-  const formatDate = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString("es-ES", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
   if (loading) {
-    return <LoadingSpinner message="Cargando tu lista..." />;
+    return <LoadingSpinner message="Cargando tu lista personal..." />;
   }
 
   if (error) {
     return (
-      <div className="error-message">
-        <p>{error}</p>
-        <button onClick={loadWatchedContent}>Reintentar</button>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={loadWatchedContent}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+          >
+            Reintentar
+          </button>
+        </div>
       </div>
     );
   }
 
+  // Separar contenido por estado
+  const watchedItems = filteredContent.filter(
+    (item) =>
+      item.watched_status === "completed" || item.watched_status === "watched"
+  );
+
+  const pendingItems = filteredContent.filter(
+    (item) =>
+      item.watched_status === "pending" ||
+      item.watched_status === "watchlist" ||
+      !item.watched_status
+  );
+
   return (
-    <div className="my-list-page">
+    <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
-      <div className="page-header">
-        <div className="header-content">
-          <h1 className="page-title">
+      <div className="bg-gradient-to-r from-red-600 to-red-800 py-12">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <h1 className="text-3xl md:text-4xl font-bold mb-4 flex items-center justify-center gap-3">
             📝 Mi Lista Personal
-            <span className="count-badge">{filteredContent.length}</span>
+            <span className="bg-white/20 px-3 py-1 rounded-full text-lg">
+              {filteredContent.length}
+            </span>
           </h1>
-          <p className="page-subtitle">
+          <p className="text-red-100 text-lg">
             {currentProfile
               ? `Lista de ${currentProfile.name}`
               : "Tu contenido marcado"}
@@ -220,717 +209,288 @@ const MyList = ({ currentProfile, isDemoMode }) => {
       </div>
 
       {watchedContent.length === 0 ? (
-        <div className="empty-list">
-          <div className="empty-icon">📝</div>
-          <h2>Tu lista está vacía</h2>
-          <p>
+        <div className="max-w-4xl mx-auto px-4 py-20 text-center">
+          <div className="text-6xl mb-6">📝</div>
+          <h2 className="text-2xl font-bold mb-4">Tu lista está vacía</h2>
+          <p className="text-gray-400 mb-8">
             Comienza agregando películas y series que hayas visto o quieras ver
           </p>
-          <div className="empty-actions">
-            <Link to="/movies" className="cta-button">
+          <div className="flex flex-wrap gap-4 justify-center">
+            <Link
+              to="/movies"
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+            >
               Explorar Películas
             </Link>
-            <Link to="/series" className="cta-button">
+            <Link
+              to="/series"
+              className="bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-lg font-semibold transition-colors"
+            >
               Explorar Series
             </Link>
           </div>
         </div>
       ) : (
-        <>
+        <div className="max-w-6xl mx-auto px-4 py-8">
           {/* Filters */}
-          <div className="filters-section">
-            <div className="filters-header">
-              <div className="search-box">
-                <Search size={20} />
+          <div className="mb-8 bg-gray-800 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">Filtros y búsqueda</h3>
+              <button
+                onClick={() => setShowFilters(!showFilters)}
+                className="flex items-center gap-2 text-red-400 hover:text-red-300"
+              >
+                <Filter size={20} />
+                {showFilters ? "Ocultar filtros" : "Mostrar filtros"}
+              </button>
+            </div>
+
+            <div className="flex gap-4 mb-4">
+              <div className="flex-1 relative">
+                <Search
+                  className="absolute left-3 top-3 text-gray-400"
+                  size={20}
+                />
                 <input
                   type="text"
                   placeholder="Buscar en tu lista..."
+                  className="w-full bg-gray-700 text-white pl-10 pr-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                   value={filters.search}
                   onChange={(e) => handleFilterChange("search", e.target.value)}
                 />
               </div>
-
-              <button
-                className={`filters-toggle ${showFilters ? "active" : ""}`}
-                onClick={() => setShowFilters(!showFilters)}
-              >
-                <Filter size={18} />
-                Filtros
-                {showFilters && (
-                  <span className="filter-count">
-                    {
-                      Object.values(filters).filter(
-                        (v) => v && v !== "watched_date"
-                      ).length
-                    }
-                  </span>
-                )}
-              </button>
             </div>
 
             {showFilters && (
-              <div className="filters-panel">
-                <div className="filters-grid">
-                  <div className="filter-group">
-                    <label>Tipo de contenido</label>
-                    <select
-                      value={filters.type}
-                      onChange={(e) =>
-                        handleFilterChange("type", e.target.value)
-                      }
-                    >
-                      <option value="">Películas y Series</option>
-                      <option value="movie">Solo Películas</option>
-                      <option value="series">Solo Series</option>
-                    </select>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <select
+                  className="bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                  value={filters.type}
+                  onChange={(e) => handleFilterChange("type", e.target.value)}
+                >
+                  <option value="">Todos los tipos</option>
+                  <option value="movie">Películas</option>
+                  <option value="series">Series</option>
+                </select>
 
-                  <div className="filter-group">
-                    <label>Estado</label>
-                    <select
-                      value={filters.status}
-                      onChange={(e) =>
-                        handleFilterChange("status", e.target.value)
-                      }
-                    >
-                      <option value="">Todos los estados</option>
-                      <option value="watched">Visto</option>
-                      <option value="watching">Viendo</option>
-                      <option value="pending">Pendiente</option>
-                    </select>
-                  </div>
+                <select
+                  className="bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                  value={filters.status}
+                  onChange={(e) => handleFilterChange("status", e.target.value)}
+                >
+                  <option value="">Todos los estados</option>
+                  <option value="completed">Visto</option>
+                  <option value="pending">Pendiente</option>
+                </select>
 
-                  <div className="filter-group">
-                    <label>Ordenar por</label>
-                    <select
-                      value={filters.sortBy}
-                      onChange={(e) =>
-                        handleFilterChange("sortBy", e.target.value)
-                      }
-                    >
-                      <option value="watched_date">Fecha agregado</option>
-                      <option value="rating">Calificación</option>
-                      <option value="year">Año</option>
-                      <option value="title">Título</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="filters-actions">
-                  <button onClick={clearFilters} className="clear-filters-btn">
-                    Limpiar filtros
-                  </button>
-                </div>
+                <select
+                  className="bg-gray-700 text-white px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+                  value={filters.sortBy}
+                  onChange={(e) => handleFilterChange("sortBy", e.target.value)}
+                >
+                  <option value="watched_date">Fecha agregado</option>
+                  <option value="rating">Calificación</option>
+                  <option value="year">Año</option>
+                  <option value="title">Título</option>
+                </select>
               </div>
+            )}
+
+            {(filters.search || filters.type || filters.status) && (
+              <button
+                onClick={clearFilters}
+                className="mt-4 text-red-400 hover:text-red-300 text-sm"
+              >
+                Limpiar filtros
+              </button>
             )}
           </div>
 
-          {/* Content List */}
-          <div className="content-list">
-            {filteredContent.length === 0 ? (
-              <div className="no-results">
-                <div className="no-results-icon">🔍</div>
-                <h3>No se encontraron resultados</h3>
-                <p>Intenta ajustar los filtros de búsqueda</p>
-                <button onClick={clearFilters} className="reset-button">
-                  Mostrar todo el contenido
-                </button>
-              </div>
-            ) : (
-              <div className="content-grid">
-                {filteredContent.map((item) => (
-                  <div key={item.id} className="content-item">
-                    <Link to={`/content/${item.id}`} className="content-link">
-                      <div className="content-poster">
-                        <img
-                          src={item.poster_url}
-                          alt={item.title}
-                          onError={(e) => {
-                            e.target.src =
-                              "https://via.placeholder.com/300x450/333/fff?text=No+Image";
-                          }}
-                        />
-                        <div className="poster-overlay">
-                          <Play size={24} />
-                        </div>
-                      </div>
-                    </Link>
-
-                    <div className="content-info">
-                      <div className="content-header">
-                        <Link
-                          to={`/content/${item.id}`}
-                          className="content-title-link"
-                        >
-                          <h3 className="content-title">{item.title}</h3>
-                        </Link>
-
-                        <button
-                          className="remove-button"
-                          onClick={() => removeFromList(item.id)}
-                          title="Eliminar de mi lista"
-                        >
-                          <X size={16} />
-                        </button>
-                      </div>
-
-                      <div className="content-meta">
-                        <div className="content-rating">
-                          <Star size={14} fill="currentColor" />
-                          <span>{item.rating}</span>
-                        </div>
-                        <div className="content-year">
-                          <Calendar size={14} />
-                          <span>{item.year}</span>
-                        </div>
-                        <div className="content-type">
-                          {item.type === "movie" ? "🎬" : "📺"}
-                        </div>
-                      </div>
-
-                      <div className="content-details">
-                        <span className="content-genre">{item.genre}</span>
-                        <span className="content-platform">
-                          {item.platform}
-                        </span>
-                      </div>
-
-                      <div className="watched-info">
-                        <div
-                          className="status-badge"
-                          style={{
-                            background: getStatusColor(item.watched_status),
-                          }}
-                        >
-                          {getStatusIcon(item.watched_status)}
-                          <span>
-                            {item.watched_status === "watched"
-                              ? "Visto"
-                              : item.watched_status === "watching"
-                              ? "Viendo"
-                              : "Pendiente"}
-                          </span>
-                        </div>
-                        <span className="watched-date">
-                          Agregado: {formatDate(item.watched_date)}
-                        </span>
-                      </div>
-
-                      <div className="content-actions">
-                        <select
-                          value={item.watched_status}
-                          onChange={(e) =>
-                            updateWatchStatus(item.id, e.target.value)
-                          }
-                          className="status-select"
-                        >
-                          <option value="pending">Pendiente</option>
-                          <option value="watching">Viendo</option>
-                          <option value="watched">Visto</option>
-                        </select>
-                      </div>
-                    </div>
+          {filteredContent.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="text-4xl mb-4">🔍</div>
+              <h3 className="text-xl font-bold mb-2">
+                No se encontraron resultados
+              </h3>
+              <p className="text-gray-400 mb-4">
+                Intenta ajustar los filtros de búsqueda
+              </p>
+              <button
+                onClick={clearFilters}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+              >
+                Mostrar todo el contenido
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Sección: Ya Visto */}
+              {watchedItems.length > 0 && (
+                <div className="mb-12">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-1 h-8 bg-green-500 rounded"></div>
+                    <h2 className="text-2xl font-bold text-white">
+                      ✅ Ya Visto ({watchedItems.length})
+                    </h2>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </>
-      )}
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                    {watchedItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-colors"
+                      >
+                        <div className="block relative">
+                          <img
+                            src={item.poster_url}
+                            alt={item.title}
+                            className="w-full h-64 object-cover"
+                            onError={(e) => {
+                              e.target.src =
+                                "https://via.placeholder.com/300x450/333/fff?text=No+Image";
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Eye className="w-8 h-8 text-white" />
+                          </div>
+                        </div>
 
-      {isDemoMode && (
-        <div className="demo-note">
-          <p>
-            📝 <strong>Demo:</strong> Esta lista utiliza LocalStorage para
-            persistir tus datos. Los cambios se guardan automáticamente en tu
-            navegador.
-          </p>
+                        <div className="p-4">
+                          <h3 className="font-bold text-sm mb-2 truncate">
+                            {item.title}
+                          </h3>
+
+                          <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                            <span className="flex items-center gap-1">
+                              <Star size={12} fill="currentColor" />
+                              {item.rating}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Calendar size={12} />
+                              {item.year}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="bg-green-600/20 text-green-400 px-2 py-1 rounded text-xs">
+                              ✅ Completado
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() =>
+                                  updateWatchStatus(item.id, "pending")
+                                }
+                                className="p-1 text-gray-400 hover:text-yellow-400 transition-colors"
+                                title="Marcar como pendiente"
+                              >
+                                <Bookmark size={14} />
+                              </button>
+                              <button
+                                onClick={() => removeFromList(item.id)}
+                                className="p-1 text-gray-400 hover:text-red-400 transition-colors"
+                                title="Eliminar de mi lista"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Sección: Pendientes de Ver */}
+              {pendingItems.length > 0 && (
+                <div className="mb-12">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-1 h-8 bg-yellow-500 rounded"></div>
+                    <h2 className="text-2xl font-bold text-white">
+                      ⏳ Pendientes de Ver ({pendingItems.length})
+                    </h2>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+                    {pendingItems.map((item) => (
+                      <div
+                        key={item.id}
+                        className="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-colors"
+                      >
+                        <div className="block relative">
+                          <img
+                            src={item.poster_url}
+                            alt={item.title}
+                            className="w-full h-64 object-cover"
+                            onError={(e) => {
+                              e.target.src =
+                                "https://via.placeholder.com/300x450/333/fff?text=No+Image";
+                            }}
+                          />
+                          <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Play className="w-8 h-8 text-white" />
+                          </div>
+                        </div>
+
+                        <div className="p-4">
+                          <h3 className="font-bold text-sm mb-2 truncate">
+                            {item.title}
+                          </h3>
+
+                          <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                            <span className="flex items-center gap-1">
+                              <Star size={12} fill="currentColor" />
+                              {item.rating}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Calendar size={12} />
+                              {item.year}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between">
+                            <div className="bg-yellow-600/20 text-yellow-400 px-2 py-1 rounded text-xs">
+                              ⏳ Pendiente
+                            </div>
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() =>
+                                  updateWatchStatus(item.id, "completed")
+                                }
+                                className="p-1 text-gray-400 hover:text-green-400 transition-colors"
+                                title="Marcar como visto"
+                              >
+                                <Eye size={14} />
+                              </button>
+                              <button
+                                onClick={() => removeFromList(item.id)}
+                                className="p-1 text-gray-400 hover:text-red-400 transition-colors"
+                                title="Eliminar de mi lista"
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
-      <style jsx>{`
-        .my-list-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-          color: white;
-          padding: 20px;
-        }
-
-        .page-header {
-          text-align: center;
-          padding: 40px 20px;
-          margin-bottom: 30px;
-        }
-
-        .page-title {
-          font-size: 2.5rem;
-          font-weight: bold;
-          margin-bottom: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-        }
-
-        .count-badge {
-          background: #e50914;
-          color: white;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 0.8rem;
-        }
-
-        .page-subtitle {
-          font-size: 1.1rem;
-          color: #ccc;
-          margin: 0;
-        }
-
-        .empty-list {
-          text-align: center;
-          padding: 80px 20px;
-        }
-
-        .empty-icon {
-          font-size: 5rem;
-          margin-bottom: 24px;
-        }
-
-        .empty-list h2 {
-          font-size: 2rem;
-          margin-bottom: 16px;
-          color: #e50914;
-        }
-
-        .empty-list p {
-          font-size: 1.1rem;
-          color: #ccc;
-          margin-bottom: 32px;
-          max-width: 500px;
-          margin-left: auto;
-          margin-right: auto;
-        }
-
-        .empty-actions {
-          display: flex;
-          gap: 16px;
-          justify-content: center;
-          flex-wrap: wrap;
-        }
-
-        .cta-button {
-          background: #e50914;
-          color: white;
-          text-decoration: none;
-          padding: 14px 28px;
-          border-radius: 8px;
-          font-weight: 500;
-          transition: background 0.3s ease;
-        }
-
-        .cta-button:hover {
-          background: #f40612;
-        }
-
-        .filters-section {
-          margin-bottom: 30px;
-        }
-
-        .filters-header {
-          display: flex;
-          gap: 16px;
-          align-items: center;
-          margin-bottom: 16px;
-        }
-
-        .search-box {
-          flex: 1;
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .search-box svg {
-          position: absolute;
-          left: 12px;
-          color: #666;
-        }
-
-        .search-box input {
-          width: 100%;
-          padding: 12px 12px 12px 44px;
-          background: #2a2a2a;
-          border: 1px solid #444;
-          border-radius: 8px;
-          color: white;
-          font-size: 14px;
-        }
-
-        .search-box input:focus {
-          outline: none;
-          border-color: #e50914;
-        }
-
-        .filters-toggle {
-          background: #2a2a2a;
-          border: 1px solid #444;
-          color: white;
-          padding: 12px 16px;
-          border-radius: 8px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.3s ease;
-        }
-
-        .filters-toggle.active {
-          background: #e50914;
-          border-color: #e50914;
-        }
-
-        .filter-count {
-          background: rgba(255, 255, 255, 0.2);
-          padding: 2px 6px;
-          border-radius: 10px;
-          font-size: 12px;
-        }
-
-        .filters-panel {
-          background: #1f1f1f;
-          border: 1px solid #444;
-          border-radius: 8px;
-          padding: 20px;
-        }
-
-        .filters-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 16px;
-          margin-bottom: 16px;
-        }
-
-        .filter-group {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .filter-group label {
-          font-size: 14px;
-          color: #ccc;
-          font-weight: 500;
-        }
-
-        .filter-group select {
-          padding: 8px 12px;
-          background: #2a2a2a;
-          border: 1px solid #444;
-          border-radius: 6px;
-          color: white;
-          font-size: 14px;
-        }
-
-        .filter-group select:focus {
-          outline: none;
-          border-color: #e50914;
-        }
-
-        .filters-actions {
-          display: flex;
-          justify-content: flex-end;
-        }
-
-        .clear-filters-btn {
-          background: transparent;
-          border: 1px solid #666;
-          color: #ccc;
-          padding: 8px 16px;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .clear-filters-btn:hover {
-          border-color: #e50914;
-          color: #e50914;
-        }
-
-        .content-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 24px;
-        }
-
-        .content-item {
-          background: linear-gradient(135deg, #1f1f1f, #2a2a2a);
-          border-radius: 12px;
-          overflow: hidden;
-          transition: transform 0.3s ease;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .content-item:hover {
-          transform: translateY(-4px);
-          border-color: rgba(229, 9, 20, 0.5);
-        }
-
-        .content-link {
-          text-decoration: none;
-          color: inherit;
-        }
-
-        .content-poster {
-          position: relative;
-          height: 200px;
-          overflow: hidden;
-        }
-
-        .content-poster img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.3s ease;
-        }
-
-        .content-item:hover .content-poster img {
-          transform: scale(1.05);
-        }
-
-        .poster-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.6);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        .content-item:hover .poster-overlay {
-          opacity: 1;
-        }
-
-        .poster-overlay svg {
-          color: white;
-        }
-
-        .content-info {
-          padding: 16px;
-        }
-
-        .content-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: flex-start;
-          margin-bottom: 8px;
-        }
-
-        .content-title-link {
-          text-decoration: none;
-          color: inherit;
-          flex: 1;
-        }
-
-        .content-title {
-          font-size: 1.1rem;
-          font-weight: 600;
-          margin: 0;
-          transition: color 0.3s ease;
-        }
-
-        .content-title-link:hover .content-title {
-          color: #e50914;
-        }
-
-        .remove-button {
-          background: rgba(239, 68, 68, 0.2);
-          border: 1px solid rgba(239, 68, 68, 0.5);
-          color: #ef4444;
-          border-radius: 6px;
-          padding: 6px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .remove-button:hover {
-          background: #ef4444;
-          color: white;
-        }
-
-        .content-meta {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 8px;
-          font-size: 14px;
-        }
-
-        .content-rating {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          color: #fbbf24;
-        }
-
-        .content-year {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          color: #ccc;
-        }
-
-        .content-type {
-          font-size: 16px;
-        }
-
-        .content-details {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 12px;
-          flex-wrap: wrap;
-        }
-
-        .content-genre,
-        .content-platform {
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 12px;
-        }
-
-        .content-genre {
-          background: rgba(229, 9, 20, 0.2);
-          color: #e50914;
-        }
-
-        .content-platform {
-          background: rgba(255, 255, 255, 0.1);
-          color: #ccc;
-        }
-
-        .watched-info {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 12px;
-          font-size: 12px;
-        }
-
-        .status-badge {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          padding: 4px 8px;
-          border-radius: 4px;
-          color: white;
-          font-weight: 500;
-        }
-
-        .watched-date {
-          color: #999;
-        }
-
-        .content-actions {
-          display: flex;
-        }
-
-        .status-select {
-          flex: 1;
-          padding: 6px 8px;
-          background: #2a2a2a;
-          border: 1px solid #444;
-          border-radius: 4px;
-          color: white;
-          font-size: 12px;
-        }
-
-        .status-select:focus {
-          outline: none;
-          border-color: #e50914;
-        }
-
-        .no-results {
-          grid-column: 1 / -1;
-          text-align: center;
-          padding: 60px 20px;
-        }
-
-        .no-results-icon {
-          font-size: 4rem;
-          margin-bottom: 16px;
-        }
-
-        .no-results h3 {
-          margin: 0 0 8px 0;
-          color: #ccc;
-        }
-
-        .no-results p {
-          color: #999;
-          margin: 0 0 20px 0;
-        }
-
-        .reset-button {
-          background: #e50914;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 14px;
-        }
-
-        .demo-note {
-          margin-top: 40px;
-          padding: 16px;
-          background: rgba(229, 9, 20, 0.1);
-          border: 1px solid rgba(229, 9, 20, 0.3);
-          border-radius: 8px;
-          text-align: center;
-        }
-
-        .demo-note p {
-          margin: 0;
-          color: #ccc;
-          font-size: 14px;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-          .my-list-page {
-            padding: 16px;
-          }
-
-          .page-title {
-            font-size: 2rem;
-            flex-direction: column;
-            gap: 8px;
-          }
-
-          .filters-header {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .filters-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .content-grid {
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 16px;
-          }
-
-          .empty-actions {
-            flex-direction: column;
-            align-items: center;
-          }
-        }
-      `}</style>
+      {isDemoMode && (
+        <div className="max-w-6xl mx-auto px-4 pb-8">
+          <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-4 text-center">
+            <p className="text-blue-200">
+              📝 <strong>Demo:</strong> Esta lista utiliza LocalStorage para
+              persistir tus datos. Los cambios se guardan automáticamente en tu
+              navegador.
+            </p>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

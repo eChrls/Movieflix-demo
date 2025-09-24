@@ -6,14 +6,16 @@ import {
   Plus,
   Search,
   Star,
+  Tv,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import demoApiService from "../services/demoApiService";
 import LoadingSpinner from "./LoadingSpinner";
 
-const Movies = ({ currentProfile, isDemoMode }) => {
-  const [movies, setMovies] = useState([]);
-  const [filteredMovies, setFilteredMovies] = useState([]);
+const Series = ({ currentProfile, isDemoMode }) => {
+  const [series, setSeries] = useState([]);
+  const [filteredSeries, setFilteredSeries] = useState([]);
   const [platforms, setPlatforms] = useState([]);
   const [genres, setGenres] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -36,22 +38,22 @@ const Movies = ({ currentProfile, isDemoMode }) => {
 
   useEffect(() => {
     applyFilters();
-  }, [movies, filters]);
+  }, [series, filters]);
 
   const loadData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const [moviesResponse, platformsResponse, genresResponse] =
+      const [seriesResponse, platformsResponse, genresResponse] =
         await Promise.all([
-          demoApiService.getContent({ type: "movie" }),
+          demoApiService.getContent({ type: "series" }),
           demoApiService.getPlatforms(),
           demoApiService.getGenres(),
         ]);
 
-      if (moviesResponse.success) {
-        setMovies(moviesResponse.data);
+      if (seriesResponse.success) {
+        setSeries(seriesResponse.data);
       }
 
       if (platformsResponse.success) {
@@ -62,41 +64,41 @@ const Movies = ({ currentProfile, isDemoMode }) => {
         setGenres(genresResponse.data);
       }
     } catch (err) {
-      console.error("Error loading movies:", err);
-      setError("Error al cargar las películas");
+      console.error("Error loading series:", err);
+      setError("Error al cargar las series");
     } finally {
       setLoading(false);
     }
   };
 
   const applyFilters = () => {
-    let filtered = [...movies];
+    let filtered = [...series];
 
     // Search filter
     if (filters.search) {
       const searchTerm = filters.search.toLowerCase();
       filtered = filtered.filter(
-        (movie) =>
-          movie.title.toLowerCase().includes(searchTerm) ||
-          movie.description.toLowerCase().includes(searchTerm)
+        (serie) =>
+          serie.title.toLowerCase().includes(searchTerm) ||
+          serie.description.toLowerCase().includes(searchTerm)
       );
     }
 
     // Platform filter
     if (filters.platform) {
       filtered = filtered.filter(
-        (movie) => movie.platform === filters.platform
+        (serie) => serie.platform === filters.platform
       );
     }
 
     // Genre filter
     if (filters.genre) {
-      filtered = filtered.filter((movie) => movie.genre === filters.genre);
+      filtered = filtered.filter((serie) => serie.genre === filters.genre);
     }
 
     // Status filter
     if (filters.status) {
-      filtered = filtered.filter((movie) => movie.status === filters.status);
+      filtered = filtered.filter((serie) => serie.status === filters.status);
     }
 
     // Sort
@@ -112,7 +114,7 @@ const Movies = ({ currentProfile, isDemoMode }) => {
       }
     });
 
-    setFilteredMovies(filtered);
+    setFilteredSeries(filtered);
   };
 
   const handleFilterChange = (key, value) => {
@@ -132,19 +134,19 @@ const Movies = ({ currentProfile, isDemoMode }) => {
     });
   };
 
-  const toggleWatchStatus = async (movieId, currentStatus) => {
+  const toggleWatchStatus = async (serieId, currentStatus) => {
     try {
       const newStatus = currentStatus === "pending" ? "watched" : "pending";
       const response = await demoApiService.updateWatchStatus(
-        movieId,
+        serieId,
         newStatus
       );
 
       if (response.success) {
         // Update local state
-        setMovies((prev) =>
-          prev.map((movie) =>
-            movie.id === movieId ? { ...movie, status: newStatus } : movie
+        setSeries((prev) =>
+          prev.map((serie) =>
+            serie.id === serieId ? { ...serie, status: newStatus } : serie
           )
         );
       }
@@ -154,7 +156,7 @@ const Movies = ({ currentProfile, isDemoMode }) => {
   };
 
   if (loading) {
-    return <LoadingSpinner message="Cargando películas..." />;
+    return <LoadingSpinner message="Cargando series..." />;
   }
 
   if (error) {
@@ -167,16 +169,16 @@ const Movies = ({ currentProfile, isDemoMode }) => {
   }
 
   return (
-    <div className="movies-page">
+    <div className="series-page">
       {/* Header */}
       <div className="page-header">
         <div className="header-content">
           <h1 className="page-title">
-            🎬 Películas
-            <span className="count-badge">{filteredMovies.length}</span>
+            📺 Series
+            <span className="count-badge">{filteredSeries.length}</span>
           </h1>
           <p className="page-subtitle">
-            Descubre y gestiona tu colección de películas
+            Explora y administra tu colección de series
           </p>
         </div>
       </div>
@@ -188,7 +190,7 @@ const Movies = ({ currentProfile, isDemoMode }) => {
             <Search size={20} />
             <input
               type="text"
-              placeholder="Buscar películas..."
+              placeholder="Buscar series..."
               value={filters.search}
               onChange={(e) => handleFilterChange("search", e.target.value)}
             />
@@ -281,65 +283,84 @@ const Movies = ({ currentProfile, isDemoMode }) => {
         )}
       </div>
 
-      {/* Movies Grid */}
-      <div className="movies-grid">
-        {filteredMovies.length === 0 ? (
+      {/* Series Grid */}
+      <div className="series-grid">
+        {filteredSeries.length === 0 ? (
           <div className="empty-state">
-            <div className="empty-icon">🎬</div>
-            <h3>No se encontraron películas</h3>
+            <div className="empty-icon">📺</div>
+            <h3>No se encontraron series</h3>
             <p>Intenta ajustar los filtros de búsqueda</p>
             <button onClick={clearFilters} className="reset-button">
-              Mostrar todas las películas
+              Mostrar todas las series
             </button>
           </div>
         ) : (
-          filteredMovies.map((movie) => (
-            <div key={movie.id} className="movie-card">
-              <div className="movie-poster">
-                <img
-                  src={movie.poster_url}
-                  alt={movie.title}
-                  onError={(e) => {
-                    e.target.src =
-                      "https://via.placeholder.com/300x450/333/fff?text=No+Image";
-                  }}
-                />
-                <div className="poster-overlay">
-                  <Play size={24} />
+          filteredSeries.map((serie) => (
+            <div key={serie.id} className="serie-card">
+              <Link to={`/content/${serie.id}`} className="serie-link">
+                <div className="serie-poster">
+                  <img
+                    src={serie.poster_url}
+                    alt={serie.title}
+                    onError={(e) => {
+                      e.target.src =
+                        "https://via.placeholder.com/300x450/333/fff?text=No+Image";
+                    }}
+                  />
+                  <div className="poster-overlay">
+                    <Play size={24} />
+                  </div>
+                  {serie.seasons && (
+                    <div className="seasons-badge">
+                      <Tv size={12} />
+                      {serie.seasons} temporadas
+                    </div>
+                  )}
                 </div>
-              </div>
+              </Link>
 
-              <div className="movie-info">
-                <h3 className="movie-title">{movie.title}</h3>
+              <div className="serie-info">
+                <Link to={`/content/${serie.id}`} className="serie-title-link">
+                  <h3 className="serie-title">{serie.title}</h3>
+                </Link>
 
-                <div className="movie-meta">
-                  <div className="movie-rating">
+                <div className="serie-meta">
+                  <div className="serie-rating">
                     <Star size={14} fill="currentColor" />
-                    <span>{movie.rating}</span>
+                    <span>{serie.rating}</span>
                   </div>
-                  <div className="movie-year">
+                  <div className="serie-year">
                     <Calendar size={14} />
-                    <span>{movie.year}</span>
+                    <span>{serie.year}</span>
                   </div>
                 </div>
 
-                <div className="movie-details">
-                  <span className="movie-genre">{movie.genre}</span>
-                  <span className="movie-platform">{movie.platform}</span>
+                <div className="serie-details">
+                  <span className="serie-genre">{serie.genre}</span>
+                  <span className="serie-platform">{serie.platform}</span>
                 </div>
 
-                <p className="movie-description">
-                  {movie.description.length > 100
-                    ? `${movie.description.substring(0, 100)}...`
-                    : movie.description}
+                {serie.seasons && serie.episodes_per_season && (
+                  <div className="serie-episodes">
+                    <small>
+                      {serie.episodes_per_season.reduce((a, b) => a + b, 0)}{" "}
+                      episodios totales
+                    </small>
+                  </div>
+                )}
+
+                <p className="serie-description">
+                  {serie.description.length > 100
+                    ? `${serie.description.substring(0, 100)}...`
+                    : serie.description}
                 </p>
 
-                <div className="movie-actions">
+                <div className="serie-actions">
                   <button
-                    className={`watch-button ${movie.status}`}
-                    onClick={() => toggleWatchStatus(movie.id, movie.status)}
+                    className={`watch-button ${serie.status}`}
+                    onClick={() => toggleWatchStatus(serie.id, serie.status)}
                   >
-                    {movie.status === "watched" ? (
+                    {serie.status === "watched" ? (
                       <>
                         <Check size={16} />
                         Vista
@@ -361,15 +382,15 @@ const Movies = ({ currentProfile, isDemoMode }) => {
       {isDemoMode && (
         <div className="demo-note">
           <p>
-            🎬 <strong>Demo:</strong> Esta página muestra {movies.length}{" "}
-            películas de demostración. En la versión completa, podrías agregar,
-            editar y eliminar contenido.
+            📺 <strong>Demo:</strong> Esta página muestra {series.length} series
+            de demostración. En la versión completa, podrías gestionar
+            temporadas y episodios individualmente.
           </p>
         </div>
       )}
 
       <style jsx>{`
-        .movies-page {
+        .series-page {
           min-height: 100vh;
           background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
           color: white;
@@ -530,13 +551,13 @@ const Movies = ({ currentProfile, isDemoMode }) => {
           color: #e50914;
         }
 
-        .movies-grid {
+        .series-grid {
           display: grid;
           grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
           gap: 24px;
         }
 
-        .movie-card {
+        .serie-card {
           background: linear-gradient(135deg, #1f1f1f, #2a2a2a);
           border-radius: 12px;
           overflow: hidden;
@@ -544,30 +565,30 @@ const Movies = ({ currentProfile, isDemoMode }) => {
           border: 1px solid rgba(255, 255, 255, 0.1);
         }
 
-        .movie-card:hover {
+        .serie-card:hover {
           transform: translateY(-4px);
           border-color: rgba(229, 9, 20, 0.5);
         }
 
-        .movie-link {
+        .serie-link {
           text-decoration: none;
           color: inherit;
         }
 
-        .movie-poster {
+        .serie-poster {
           position: relative;
           height: 300px;
           overflow: hidden;
         }
 
-        .movie-poster img {
+        .serie-poster img {
           width: 100%;
           height: 100%;
           object-fit: cover;
           transition: transform 0.3s ease;
         }
 
-        .movie-card:hover .movie-poster img {
+        .serie-card:hover .serie-poster img {
           transform: scale(1.05);
         }
 
@@ -585,7 +606,7 @@ const Movies = ({ currentProfile, isDemoMode }) => {
           transition: opacity 0.3s ease;
         }
 
-        .movie-card:hover .poster-overlay {
+        .serie-card:hover .poster-overlay {
           opacity: 1;
         }
 
@@ -593,27 +614,41 @@ const Movies = ({ currentProfile, isDemoMode }) => {
           color: white;
         }
 
-        .movie-info {
+        .seasons-badge {
+          position: absolute;
+          bottom: 8px;
+          right: 8px;
+          background: rgba(0, 0, 0, 0.8);
+          color: white;
+          padding: 4px 8px;
+          border-radius: 4px;
+          font-size: 12px;
+          display: flex;
+          align-items: center;
+          gap: 4px;
+        }
+
+        .serie-info {
           padding: 16px;
         }
 
-        .movie-title-link {
+        .serie-title-link {
           text-decoration: none;
           color: inherit;
         }
 
-        .movie-title {
+        .serie-title {
           font-size: 1.1rem;
           font-weight: 600;
           margin: 0 0 8px 0;
           transition: color 0.3s ease;
         }
 
-        .movie-title-link:hover .movie-title {
+        .serie-title-link:hover .serie-title {
           color: #e50914;
         }
 
-        .movie-meta {
+        .serie-meta {
           display: flex;
           align-items: center;
           gap: 16px;
@@ -621,53 +656,62 @@ const Movies = ({ currentProfile, isDemoMode }) => {
           font-size: 14px;
         }
 
-        .movie-rating,
-        .movie-year {
+        .serie-rating,
+        .serie-year {
           display: flex;
           align-items: center;
           gap: 4px;
         }
 
-        .movie-rating {
+        .serie-rating {
           color: #fbbf24;
         }
 
-        .movie-year {
+        .serie-year {
           color: #ccc;
         }
 
-        .movie-details {
+        .serie-details {
           display: flex;
           gap: 8px;
-          margin-bottom: 12px;
+          margin-bottom: 8px;
           flex-wrap: wrap;
         }
 
-        .movie-genre,
-        .movie-platform {
+        .serie-genre,
+        .serie-platform {
           padding: 4px 8px;
           border-radius: 4px;
           font-size: 12px;
         }
 
-        .movie-genre {
+        .serie-genre {
           background: rgba(229, 9, 20, 0.2);
           color: #e50914;
         }
 
-        .movie-platform {
+        .serie-platform {
           background: rgba(255, 255, 255, 0.1);
           color: #ccc;
         }
 
-        .movie-description {
+        .serie-episodes {
+          margin-bottom: 8px;
+        }
+
+        .serie-episodes small {
+          color: #999;
+          font-size: 12px;
+        }
+
+        .serie-description {
           color: #ccc;
           font-size: 14px;
           line-height: 1.4;
           margin: 0 0 16px 0;
         }
 
-        .movie-actions {
+        .serie-actions {
           display: flex;
           gap: 8px;
         }
@@ -754,7 +798,7 @@ const Movies = ({ currentProfile, isDemoMode }) => {
 
         /* Responsive */
         @media (max-width: 768px) {
-          .movies-page {
+          .series-page {
             padding: 16px;
           }
 
@@ -773,7 +817,7 @@ const Movies = ({ currentProfile, isDemoMode }) => {
             grid-template-columns: 1fr;
           }
 
-          .movies-grid {
+          .series-grid {
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
             gap: 16px;
           }
@@ -783,4 +827,4 @@ const Movies = ({ currentProfile, isDemoMode }) => {
   );
 };
 
-export default Movies;
+export default Series;

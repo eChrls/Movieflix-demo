@@ -1,15 +1,5 @@
-import {
-  Calendar,
-  Check,
-  Filter,
-  Play,
-  Plus,
-  Search,
-  Star,
-  Tv,
-} from "lucide-react";
+import { Calendar, Clock, Filter, Search, Star, Tv } from "lucide-react";
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import demoApiService from "../services/demoApiService";
 import LoadingSpinner from "./LoadingSpinner";
 
@@ -26,7 +16,6 @@ const Series = ({ currentProfile, isDemoMode }) => {
     search: "",
     platform: "",
     genre: "",
-    status: "",
     sortBy: "rating",
   });
 
@@ -53,15 +42,15 @@ const Series = ({ currentProfile, isDemoMode }) => {
         ]);
 
       if (seriesResponse.success) {
-        setSeries(seriesResponse.data);
+        setSeries(seriesResponse.data || []);
       }
 
       if (platformsResponse.success) {
-        setPlatforms(platformsResponse.data);
+        setPlatforms(platformsResponse.data || []);
       }
 
       if (genresResponse.success) {
-        setGenres(genresResponse.data);
+        setGenres(genresResponse.data || []);
       }
     } catch (err) {
       console.error("Error loading series:", err);
@@ -72,6 +61,11 @@ const Series = ({ currentProfile, isDemoMode }) => {
   };
 
   const applyFilters = () => {
+    if (!series || series.length === 0) {
+      setFilteredSeries([]);
+      return;
+    }
+
     let filtered = [...series];
 
     // Search filter
@@ -79,8 +73,9 @@ const Series = ({ currentProfile, isDemoMode }) => {
       const searchTerm = filters.search.toLowerCase();
       filtered = filtered.filter(
         (serie) =>
-          serie.title.toLowerCase().includes(searchTerm) ||
-          serie.description.toLowerCase().includes(searchTerm)
+          (serie.title && serie.title.toLowerCase().includes(searchTerm)) ||
+          (serie.description &&
+            serie.description.toLowerCase().includes(searchTerm))
       );
     }
 
@@ -96,21 +91,16 @@ const Series = ({ currentProfile, isDemoMode }) => {
       filtered = filtered.filter((serie) => serie.genre === filters.genre);
     }
 
-    // Status filter
-    if (filters.status) {
-      filtered = filtered.filter((serie) => serie.status === filters.status);
-    }
-
     // Sort
     filtered.sort((a, b) => {
       switch (filters.sortBy) {
         case "title":
-          return a.title.localeCompare(b.title);
+          return (a.title || "").localeCompare(b.title || "");
         case "year":
-          return b.year - a.year;
+          return (b.year || 0) - (a.year || 0);
         case "rating":
         default:
-          return b.rating - a.rating;
+          return (b.rating || 0) - (a.rating || 0);
       }
     });
 
@@ -129,30 +119,29 @@ const Series = ({ currentProfile, isDemoMode }) => {
       search: "",
       platform: "",
       genre: "",
-      status: "",
       sortBy: "rating",
     });
   };
 
-  const toggleWatchStatus = async (serieId, currentStatus) => {
-    try {
-      const newStatus = currentStatus === "pending" ? "watched" : "pending";
-      const response = await demoApiService.updateWatchStatus(
-        serieId,
-        newStatus
-      );
+  const handleAddToWatched = async (serie, e) => {
+    e.preventDefault();
+    e.stopPropagation();
 
+    try {
+      const response = await demoApiService.addToWatched(serie.id, "pending");
       if (response.success) {
-        // Update local state
-        setSeries((prev) =>
-          prev.map((serie) =>
-            serie.id === serieId ? { ...serie, status: newStatus } : serie
-          )
-        );
+        // Optionally refresh data or show success message
+        console.log("Serie agregada a la lista");
       }
     } catch (err) {
-      console.error("Error updating watch status:", err);
+      console.error("Error adding to watched:", err);
     }
+  };
+
+  const formatDuration = (serie) => {
+    const seasons = serie.seasons || 1;
+    const episodeDuration = serie.episode_duration || 45;
+    return `${seasons} temp • ${episodeDuration} min/ep`;
   };
 
   if (loading) {
@@ -161,668 +150,231 @@ const Series = ({ currentProfile, isDemoMode }) => {
 
   if (error) {
     return (
-      <div className="error-message">
-        <p>{error}</p>
-        <button onClick={loadData}>Reintentar</button>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={loadData}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+          >
+            Reintentar
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="series-page">
+    <div className="min-h-screen bg-gray-900 text-white">
       {/* Header */}
-      <div className="page-header">
-        <div className="header-content">
-          <h1 className="page-title">
-            📺 Series
-            <span className="count-badge">{filteredSeries.length}</span>
-          </h1>
-          <p className="page-subtitle">
-            Explora y administra tu colección de series
-          </p>
+      <div className="bg-gradient-to-r from-purple-600 to-purple-800 py-8 mb-8">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold mb-2 flex items-center gap-2">
+                <Tv className="w-8 h-8" />
+                Series
+                <span className="text-lg bg-purple-500 px-2 py-1 rounded-full">
+                  {filteredSeries.length}
+                </span>
+              </h1>
+              <p className="text-purple-100">
+                Explora y administra tu colección de series
+              </p>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="filters-section">
-        <div className="filters-header">
-          <div className="search-box">
-            <Search size={20} />
-            <input
-              type="text"
-              placeholder="Buscar series..."
-              value={filters.search}
-              onChange={(e) => handleFilterChange("search", e.target.value)}
-            />
-          </div>
-
-          <button
-            className={`filters-toggle ${showFilters ? "active" : ""}`}
-            onClick={() => setShowFilters(!showFilters)}
-          >
-            <Filter size={18} />
-            Filtros
-            {showFilters && (
-              <span className="filter-count">
-                {
-                  Object.values(filters).filter((v) => v && v !== "rating")
-                    .length
-                }
-              </span>
-            )}
-          </button>
-        </div>
-
-        {showFilters && (
-          <div className="filters-panel">
-            <div className="filters-grid">
-              <div className="filter-group">
-                <label>Plataforma</label>
-                <select
-                  value={filters.platform}
-                  onChange={(e) =>
-                    handleFilterChange("platform", e.target.value)
-                  }
-                >
-                  <option value="">Todas las plataformas</option>
-                  {platforms.map((platform) => (
-                    <option key={platform.id} value={platform.name}>
-                      {platform.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="filter-group">
-                <label>Género</label>
-                <select
-                  value={filters.genre}
-                  onChange={(e) => handleFilterChange("genre", e.target.value)}
-                >
-                  <option value="">Todos los géneros</option>
-                  {genres.map((genre) => (
-                    <option key={genre.id} value={genre.name}>
-                      {genre.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="filter-group">
-                <label>Estado</label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => handleFilterChange("status", e.target.value)}
-                >
-                  <option value="">Todos</option>
-                  <option value="pending">Pendientes</option>
-                  <option value="watched">Vistas</option>
-                  <option value="watching">Viendo</option>
-                </select>
-              </div>
-
-              <div className="filter-group">
-                <label>Ordenar por</label>
-                <select
-                  value={filters.sortBy}
-                  onChange={(e) => handleFilterChange("sortBy", e.target.value)}
-                >
-                  <option value="rating">Calificación</option>
-                  <option value="year">Año</option>
-                  <option value="title">Título</option>
-                </select>
-              </div>
+      <div className="max-w-6xl mx-auto px-4">
+        {/* Filters */}
+        <div className="mb-8">
+          <div className="flex flex-col md:flex-row gap-4 mb-4">
+            {/* Search */}
+            <div className="flex-1 relative">
+              <Search
+                className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+                size={20}
+              />
+              <input
+                type="text"
+                placeholder="Buscar series..."
+                value={filters.search}
+                onChange={(e) => handleFilterChange("search", e.target.value)}
+                className="w-full pl-10 pr-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:border-purple-500"
+              />
             </div>
 
-            <div className="filters-actions">
-              <button onClick={clearFilters} className="clear-filters-btn">
+            {/* Filter Toggle */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                showFilters
+                  ? "bg-purple-600 text-white"
+                  : "bg-gray-800 text-gray-300 hover:bg-gray-700"
+              }`}
+            >
+              <Filter size={20} />
+              Filtros
+            </button>
+          </div>
+
+          {/* Advanced Filters */}
+          {showFilters && (
+            <div className="bg-gray-800 rounded-lg p-6 mb-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                {/* Platform Filter */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Plataforma
+                  </label>
+                  <select
+                    value={filters.platform}
+                    onChange={(e) =>
+                      handleFilterChange("platform", e.target.value)
+                    }
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="">Todas las plataformas</option>
+                    {platforms.map((platform) => (
+                      <option key={platform} value={platform}>
+                        {platform}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Genre Filter */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Género
+                  </label>
+                  <select
+                    value={filters.genre}
+                    onChange={(e) =>
+                      handleFilterChange("genre", e.target.value)
+                    }
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="">Todos los géneros</option>
+                    {genres.map((genre) => (
+                      <option key={genre} value={genre}>
+                        {genre}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Sort */}
+                <div>
+                  <label className="block text-sm font-medium mb-2">
+                    Ordenar por
+                  </label>
+                  <select
+                    value={filters.sortBy}
+                    onChange={(e) =>
+                      handleFilterChange("sortBy", e.target.value)
+                    }
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:border-purple-500"
+                  >
+                    <option value="rating">Calificación</option>
+                    <option value="title">Título</option>
+                    <option value="year">Año</option>
+                  </select>
+                </div>
+              </div>
+
+              <button
+                onClick={clearFilters}
+                className="text-purple-400 hover:text-purple-300 text-sm"
+              >
                 Limpiar filtros
               </button>
             </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Series Grid */}
-      <div className="series-grid">
+        {/* Series Grid */}
         {filteredSeries.length === 0 ? (
-          <div className="empty-state">
-            <div className="empty-icon">📺</div>
-            <h3>No se encontraron series</h3>
-            <p>Intenta ajustar los filtros de búsqueda</p>
-            <button onClick={clearFilters} className="reset-button">
-              Mostrar todas las series
-            </button>
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">📺</div>
+            <h3 className="text-xl font-bold mb-2">No se encontraron series</h3>
+            <p className="text-gray-400 mb-6">
+              {filters.search || filters.platform || filters.genre
+                ? "Intenta ajustar tus filtros de búsqueda"
+                : "No hay series disponibles en este momento"}
+            </p>
+            {(filters.search || filters.platform || filters.genre) && (
+              <button
+                onClick={clearFilters}
+                className="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg"
+              >
+                Limpiar filtros
+              </button>
+            )}
           </div>
         ) : (
-          filteredSeries.map((serie) => (
-            <div key={serie.id} className="serie-card">
-              <Link to={`/content/${serie.id}`} className="serie-link">
-                <div className="serie-poster">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+            {filteredSeries.map((serie) => (
+              <div
+                key={serie.id}
+                className="group relative bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-all duration-300 hover:scale-105"
+              >
+                <div className="relative aspect-[2/3]">
                   <img
                     src={serie.poster_url}
                     alt={serie.title}
+                    className="w-full h-full object-cover"
                     onError={(e) => {
                       e.target.src =
                         "https://via.placeholder.com/300x450/333/fff?text=No+Image";
                     }}
                   />
-                  <div className="poster-overlay">
-                    <Play size={24} />
-                  </div>
-                  {serie.seasons && (
-                    <div className="seasons-badge">
-                      <Tv size={12} />
-                      {serie.seasons} temporadas
-                    </div>
-                  )}
-                </div>
-              </Link>
 
-              <div className="serie-info">
-                <Link to={`/content/${serie.id}`} className="serie-title-link">
-                  <h3 className="serie-title">{serie.title}</h3>
-                </Link>
-
-                <div className="serie-meta">
-                  <div className="serie-rating">
-                    <Star size={14} fill="currentColor" />
-                    <span>{serie.rating}</span>
-                  </div>
-                  <div className="serie-year">
-                    <Calendar size={14} />
-                    <span>{serie.year}</span>
+                  {/* Hover overlay with controls */}
+                  <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                    <button
+                      onClick={(e) => handleAddToWatched(serie, e)}
+                      className="p-2 bg-purple-600 hover:bg-purple-700 text-white rounded-full transition-colors"
+                      title="Agregar a mi lista"
+                    >
+                      <Clock size={16} />
+                    </button>
                   </div>
                 </div>
 
-                <div className="serie-details">
-                  <span className="serie-genre">{serie.genre}</span>
-                  <span className="serie-platform">{serie.platform}</span>
-                </div>
-
-                {serie.seasons && serie.episodes_per_season && (
-                  <div className="serie-episodes">
-                    <small>
-                      {serie.episodes_per_season.reduce((a, b) => a + b, 0)}{" "}
-                      episodios totales
-                    </small>
+                {/* Info section */}
+                <div className="p-4">
+                  <h3 className="font-bold text-sm mb-2 line-clamp-2">
+                    {serie.title}
+                  </h3>
+                  <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
+                    <span className="flex items-center gap-1">
+                      <Calendar size={10} />
+                      {serie.year}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Star size={10} fill="currentColor" />
+                      {serie.rating}
+                    </span>
                   </div>
-                )}
-
-                <p className="serie-description">
-                  {serie.description.length > 100
-                    ? `${serie.description.substring(0, 100)}...`
-                    : serie.description}
-                </p>
-
-                <div className="serie-actions">
-                  <button
-                    className={`watch-button ${serie.status}`}
-                    onClick={() => toggleWatchStatus(serie.id, serie.status)}
-                  >
-                    {serie.status === "watched" ? (
-                      <>
-                        <Check size={16} />
-                        Vista
-                      </>
-                    ) : (
-                      <>
-                        <Plus size={16} />
-                        Marcar como vista
-                      </>
-                    )}
-                  </button>
+                  <p className="text-xs text-gray-500 mb-2">
+                    {formatDuration(serie)}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="bg-gray-700 px-2 py-1 rounded">
+                      {serie.platform}
+                    </span>
+                    <span className="bg-gray-700 px-2 py-1 rounded">
+                      {serie.genre}
+                    </span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </div>
-
-      {isDemoMode && (
-        <div className="demo-note">
-          <p>
-            📺 <strong>Demo:</strong> Esta página muestra {series.length} series
-            de demostración. En la versión completa, podrías gestionar
-            temporadas y episodios individualmente.
-          </p>
-        </div>
-      )}
-
-      <style jsx>{`
-        .series-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-          color: white;
-          padding: 20px;
-        }
-
-        .page-header {
-          text-align: center;
-          padding: 40px 20px;
-          margin-bottom: 30px;
-        }
-
-        .page-title {
-          font-size: 2.5rem;
-          font-weight: bold;
-          margin-bottom: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-        }
-
-        .count-badge {
-          background: #e50914;
-          color: white;
-          padding: 4px 12px;
-          border-radius: 20px;
-          font-size: 0.8rem;
-        }
-
-        .page-subtitle {
-          font-size: 1.1rem;
-          color: #ccc;
-          margin: 0;
-        }
-
-        .filters-section {
-          margin-bottom: 30px;
-        }
-
-        .filters-header {
-          display: flex;
-          gap: 16px;
-          align-items: center;
-          margin-bottom: 16px;
-        }
-
-        .search-box {
-          flex: 1;
-          position: relative;
-          display: flex;
-          align-items: center;
-        }
-
-        .search-box svg {
-          position: absolute;
-          left: 12px;
-          color: #666;
-        }
-
-        .search-box input {
-          width: 100%;
-          padding: 12px 12px 12px 44px;
-          background: #2a2a2a;
-          border: 1px solid #444;
-          border-radius: 8px;
-          color: white;
-          font-size: 14px;
-        }
-
-        .search-box input:focus {
-          outline: none;
-          border-color: #e50914;
-        }
-
-        .filters-toggle {
-          background: #2a2a2a;
-          border: 1px solid #444;
-          color: white;
-          padding: 12px 16px;
-          border-radius: 8px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          transition: all 0.3s ease;
-        }
-
-        .filters-toggle.active {
-          background: #e50914;
-          border-color: #e50914;
-        }
-
-        .filter-count {
-          background: rgba(255, 255, 255, 0.2);
-          padding: 2px 6px;
-          border-radius: 10px;
-          font-size: 12px;
-        }
-
-        .filters-panel {
-          background: #1f1f1f;
-          border: 1px solid #444;
-          border-radius: 8px;
-          padding: 20px;
-        }
-
-        .filters-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          gap: 16px;
-          margin-bottom: 16px;
-        }
-
-        .filter-group {
-          display: flex;
-          flex-direction: column;
-          gap: 6px;
-        }
-
-        .filter-group label {
-          font-size: 14px;
-          color: #ccc;
-          font-weight: 500;
-        }
-
-        .filter-group select {
-          padding: 8px 12px;
-          background: #2a2a2a;
-          border: 1px solid #444;
-          border-radius: 6px;
-          color: white;
-          font-size: 14px;
-        }
-
-        .filter-group select:focus {
-          outline: none;
-          border-color: #e50914;
-        }
-
-        .filters-actions {
-          display: flex;
-          justify-content: flex-end;
-        }
-
-        .clear-filters-btn {
-          background: transparent;
-          border: 1px solid #666;
-          color: #ccc;
-          padding: 8px 16px;
-          border-radius: 6px;
-          cursor: pointer;
-          transition: all 0.3s ease;
-        }
-
-        .clear-filters-btn:hover {
-          border-color: #e50914;
-          color: #e50914;
-        }
-
-        .series-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-          gap: 24px;
-        }
-
-        .serie-card {
-          background: linear-gradient(135deg, #1f1f1f, #2a2a2a);
-          border-radius: 12px;
-          overflow: hidden;
-          transition: transform 0.3s ease;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .serie-card:hover {
-          transform: translateY(-4px);
-          border-color: rgba(229, 9, 20, 0.5);
-        }
-
-        .serie-link {
-          text-decoration: none;
-          color: inherit;
-        }
-
-        .serie-poster {
-          position: relative;
-          height: 300px;
-          overflow: hidden;
-        }
-
-        .serie-poster img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          transition: transform 0.3s ease;
-        }
-
-        .serie-card:hover .serie-poster img {
-          transform: scale(1.05);
-        }
-
-        .poster-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.6);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          opacity: 0;
-          transition: opacity 0.3s ease;
-        }
-
-        .serie-card:hover .poster-overlay {
-          opacity: 1;
-        }
-
-        .poster-overlay svg {
-          color: white;
-        }
-
-        .seasons-badge {
-          position: absolute;
-          bottom: 8px;
-          right: 8px;
-          background: rgba(0, 0, 0, 0.8);
-          color: white;
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 12px;
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-
-        .serie-info {
-          padding: 16px;
-        }
-
-        .serie-title-link {
-          text-decoration: none;
-          color: inherit;
-        }
-
-        .serie-title {
-          font-size: 1.1rem;
-          font-weight: 600;
-          margin: 0 0 8px 0;
-          transition: color 0.3s ease;
-        }
-
-        .serie-title-link:hover .serie-title {
-          color: #e50914;
-        }
-
-        .serie-meta {
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          margin-bottom: 8px;
-          font-size: 14px;
-        }
-
-        .serie-rating,
-        .serie-year {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-        }
-
-        .serie-rating {
-          color: #fbbf24;
-        }
-
-        .serie-year {
-          color: #ccc;
-        }
-
-        .serie-details {
-          display: flex;
-          gap: 8px;
-          margin-bottom: 8px;
-          flex-wrap: wrap;
-        }
-
-        .serie-genre,
-        .serie-platform {
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 12px;
-        }
-
-        .serie-genre {
-          background: rgba(229, 9, 20, 0.2);
-          color: #e50914;
-        }
-
-        .serie-platform {
-          background: rgba(255, 255, 255, 0.1);
-          color: #ccc;
-        }
-
-        .serie-episodes {
-          margin-bottom: 8px;
-        }
-
-        .serie-episodes small {
-          color: #999;
-          font-size: 12px;
-        }
-
-        .serie-description {
-          color: #ccc;
-          font-size: 14px;
-          line-height: 1.4;
-          margin: 0 0 16px 0;
-        }
-
-        .serie-actions {
-          display: flex;
-          gap: 8px;
-        }
-
-        .watch-button {
-          flex: 1;
-          padding: 8px 12px;
-          border: 1px solid #444;
-          border-radius: 6px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 6px;
-          font-size: 14px;
-          transition: all 0.3s ease;
-        }
-
-        .watch-button.pending {
-          background: transparent;
-          color: white;
-        }
-
-        .watch-button.pending:hover {
-          background: #e50914;
-          border-color: #e50914;
-        }
-
-        .watch-button.watched {
-          background: #22c55e;
-          border-color: #22c55e;
-          color: white;
-        }
-
-        .watch-button.watched:hover {
-          background: #16a34a;
-        }
-
-        .empty-state {
-          grid-column: 1 / -1;
-          text-align: center;
-          padding: 60px 20px;
-        }
-
-        .empty-icon {
-          font-size: 4rem;
-          margin-bottom: 16px;
-        }
-
-        .empty-state h3 {
-          margin: 0 0 8px 0;
-          color: #ccc;
-        }
-
-        .empty-state p {
-          color: #999;
-          margin: 0 0 20px 0;
-        }
-
-        .reset-button {
-          background: #e50914;
-          color: white;
-          border: none;
-          padding: 12px 24px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: 14px;
-        }
-
-        .demo-note {
-          margin-top: 40px;
-          padding: 16px;
-          background: rgba(229, 9, 20, 0.1);
-          border: 1px solid rgba(229, 9, 20, 0.3);
-          border-radius: 8px;
-          text-align: center;
-        }
-
-        .demo-note p {
-          margin: 0;
-          color: #ccc;
-          font-size: 14px;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-          .series-page {
-            padding: 16px;
-          }
-
-          .page-title {
-            font-size: 2rem;
-            flex-direction: column;
-            gap: 8px;
-          }
-
-          .filters-header {
-            flex-direction: column;
-            align-items: stretch;
-          }
-
-          .filters-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .series-grid {
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 16px;
-          }
-        }
-      `}</style>
     </div>
   );
 };

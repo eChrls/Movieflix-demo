@@ -1,16 +1,24 @@
-import { Clock, Film, Star, TrendingUp, Tv } from "lucide-react";
+import {
+  Check,
+  Clock,
+  Eye,
+  Film,
+  Star,
+  Trash2,
+  TrendingUp,
+  Tv,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import demoApiService from "../services/demoApiService";
 import LoadingSpinner from "./LoadingSpinner";
 
 const Home = ({ currentProfile, isDemoMode }) => {
-  const [topContent, setTopContent] = useState({ movies: [], series: [] });
+  const [myListContent, setMyListContent] = useState([]);
   const [recentContent, setRecentContent] = useState([]);
   const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
-  const [activeTopTab, setActiveTopTab] = useState("movies");
 
   useEffect(() => {
     loadHomeData();
@@ -21,19 +29,20 @@ const Home = ({ currentProfile, isDemoMode }) => {
       setLoading(true);
       setError(null);
 
-      const [topResponse, contentResponse, statsResponse] = await Promise.all([
-        demoApiService.getTopContent(),
-        demoApiService.getContent({ sortBy: "year" }),
-        demoApiService.getStatistics(),
-      ]);
+      const [myListResponse, contentResponse, statsResponse] =
+        await Promise.all([
+          demoApiService.getWatchedContent(),
+          demoApiService.getContent({ sortBy: "year" }),
+          demoApiService.getStatistics(),
+        ]);
 
-      if (topResponse.success) {
-        setTopContent(topResponse.data);
+      if (myListResponse.success) {
+        setMyListContent(myListResponse.data);
       }
 
       if (contentResponse.success) {
-        // Get recent content (last 6 items)
-        setRecentContent(contentResponse.data.slice(0, 6));
+        // Get recent content (last 4 items for a single row)
+        setRecentContent(contentResponse.data.slice(0, 4));
       }
 
       if (statsResponse.success) {
@@ -41,575 +50,392 @@ const Home = ({ currentProfile, isDemoMode }) => {
       }
     } catch (err) {
       console.error("Error loading home data:", err);
-      setError("Error al cargar los datos");
+      setError("Error de conexión. Inténtalo de nuevo.");
     } finally {
       setLoading(false);
     }
   };
 
+  const handleMarkAsWatched = async (content, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    try {
+      const newStatus =
+        content.watched_status === "completed" ? "pending" : "completed";
+      const response = await demoApiService.updateWatchStatus(
+        content.id,
+        newStatus
+      );
+      if (response.success) {
+        loadHomeData(); // Reload to update the list
+      }
+    } catch (err) {
+      console.error("Error updating watch status:", err);
+    }
+  };
+
+  const handleDelete = async (content, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (
+      window.confirm(
+        `¿Seguro que quieres eliminar "${content.title}" de tu lista?`
+      )
+    ) {
+      try {
+        const response = await demoApiService.removeFromWatched(content.id);
+        if (response.success) {
+          loadHomeData(); // Reload to update the list
+        }
+      } catch (err) {
+        console.error("Error deleting content:", err);
+      }
+    }
+  };
+
+  const formatDuration = (content) => {
+    if (content.type === "movie") {
+      const duration = content.duration || 120;
+      return `${duration} min`;
+    } else {
+      const seasons = content.seasons || 1;
+      const episodeDuration = content.episode_duration || 45;
+      return `${seasons} temp • ${episodeDuration} min/ep`;
+    }
+  };
+
+  const getStatusColor = (status) => {
+    return status === "completed" ? "text-green-400" : "text-yellow-400";
+  };
+
+  const getStatusIcon = (status) => {
+    return status === "completed" ? <Eye size={16} /> : <Clock size={16} />;
+  };
+
+  const getStatusText = (status) => {
+    return status === "completed" ? "Vista" : "Pendiente";
+  };
+
   if (loading) {
-    return <LoadingSpinner message="Cargando inicio..." />;
+    return <LoadingSpinner message="Cargando tu página principal..." />;
   }
 
   if (error) {
     return (
-      <div className="error-message">
-        <p>{error}</p>
-        <button onClick={loadHomeData}>Reintentar</button>
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-400 mb-4">{error}</p>
+          <button
+            onClick={loadHomeData}
+            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+          >
+            Reintentar
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="home-page">
-      {/* Hero Section */}
-      <section className="hero-section">
-        <div className="hero-content">
-          <h1 className="hero-title">
+    <div className="min-h-screen bg-gray-900 text-white">
+      {/* Header compacto */}
+      <div className="bg-gradient-to-r from-red-600 to-red-800 py-8 mb-8">
+        <div className="max-w-6xl mx-auto px-4 text-center">
+          <h1 className="text-2xl md:text-3xl font-bold mb-2">
             ¡Bienvenido{currentProfile ? `, ${currentProfile.name}` : ""}! 🎬
           </h1>
-          <p className="hero-subtitle">
+          <p className="text-red-100 text-sm md:text-base mb-3">
             Descubre y gestiona tu contenido audiovisual favorito
           </p>
           {isDemoMode && (
-            <div className="demo-notice">
-              <span className="demo-icon">🚀</span>
+            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm rounded-full px-4 py-2 text-sm">
+              <span className="text-yellow-300">🚀</span>
               <span>Versión Demo - Explora todas las funcionalidades</span>
             </div>
           )}
         </div>
-      </section>
+      </div>
 
-      {/* Statistics Section */}
-      {statistics && (
-        <section className="stats-section">
-          <h2 className="section-title">📊 Tu Actividad</h2>
-          <div className="stats-grid">
-            <div className="stat-card">
-              <div className="stat-icon">
-                <Film />
-              </div>
-              <div className="stat-info">
-                <h3>{statistics.movies.watched}</h3>
-                <p>Películas vistas</p>
-                <span className="stat-total">de {statistics.movies.total}</span>
-              </div>
-            </div>
-
-            <div className="stat-card">
-              <div className="stat-icon">
-                <Tv />
-              </div>
-              <div className="stat-info">
-                <h3>{statistics.series.watched}</h3>
-                <p>Series vistas</p>
-                <span className="stat-total">de {statistics.series.total}</span>
-              </div>
-            </div>
-
-            <div className="stat-card">
-              <div className="stat-icon">
-                <TrendingUp />
-              </div>
-              <div className="stat-info">
-                <h3>{statistics.completionRate}%</h3>
-                <p>Progreso total</p>
-                <span className="stat-total">
-                  {statistics.totalWatched} contenidos
-                </span>
-              </div>
-            </div>
-
-            <div className="stat-card">
-              <div className="stat-icon">
-                <Star />
-              </div>
-              <div className="stat-info">
-                <h3>{Object.keys(statistics.platforms).length}</h3>
-                <p>Plataformas</p>
-                <span className="stat-total">utilizadas</span>
-              </div>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {/* Top Content Section */}
-      <section className="top-content-section">
-        <div className="section-header">
-          <h2 className="section-title">🏆 Top 3 Recomendado</h2>
-          <div className="top-tabs">
-            <button
-              className={`top-tab ${activeTopTab === "movies" ? "active" : ""}`}
-              onClick={() => setActiveTopTab("movies")}
-            >
-              <Film size={16} />
-              Películas
-            </button>
-            <button
-              className={`top-tab ${activeTopTab === "series" ? "active" : ""}`}
-              onClick={() => setActiveTopTab("series")}
-            >
-              <Tv size={16} />
-              Series
-            </button>
-          </div>
-        </div>
-
-        <div className="top-content-grid">
-          {topContent[activeTopTab]?.map((content, index) => (
-            <Link
-              key={content.id}
-              to={`/content/${content.id}`}
-              className="top-content-card"
-            >
-              <div className="rank-badge">#{index + 1}</div>
-              <div className="content-poster">
-                <img
-                  src={content.poster_url}
-                  alt={content.title}
-                  onError={(e) => {
-                    e.target.src =
-                      "https://via.placeholder.com/300x450/333/fff?text=No+Image";
-                  }}
-                />
-              </div>
-              <div className="content-info">
-                <h3>{content.title}</h3>
-                <div className="content-meta">
-                  <span className="rating">
-                    <Star size={14} fill="currentColor" />
-                    {content.rating}
-                  </span>
-                  <span className="year">{content.year}</span>
-                </div>
-                <p className="content-genre">{content.genre}</p>
-                <p className="content-platform">{content.platform}</p>
-              </div>
-            </Link>
-          ))}
-        </div>
-      </section>
-
-      {/* Recent Content Section */}
-      <section className="recent-content-section">
-        <div className="section-header">
-          <h2 className="section-title">
-            <Clock size={20} />
-            Contenido Reciente
-          </h2>
-          <Link to="/movies" className="see-all-link">
-            Ver todo →
-          </Link>
-        </div>
-
-        <div className="content-grid">
-          {recentContent.map((content) => (
-            <Link
-              key={content.id}
-              to={`/content/${content.id}`}
-              className="content-card"
-            >
-              <div className="card-poster">
-                <img
-                  src={content.poster_url}
-                  alt={content.title}
-                  onError={(e) => {
-                    e.target.src =
-                      "https://via.placeholder.com/200x300/333/fff?text=No+Image";
-                  }}
-                />
-                <div className="card-overlay">
-                  <div className="card-type">
-                    {content.type === "movie" ? "🎬" : "📺"}
+      <div className="max-w-6xl mx-auto px-4">
+        {/* Statistics Section */}
+        {statistics && (
+          <section className="mb-8">
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+              📊 Tu Actividad
+            </h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-blue-600 rounded-lg">
+                    <Film className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-bold text-white">
+                      {statistics.movies.watched}
+                    </h3>
+                    <p className="text-gray-300">Películas vistas</p>
+                    <span className="text-sm text-gray-400">
+                      de {statistics.movies.total}
+                    </span>
                   </div>
                 </div>
               </div>
-              <div className="card-info">
-                <h4>{content.title}</h4>
-                <div className="card-meta">
-                  <span className="card-rating">
-                    <Star size={12} fill="currentColor" />
-                    {content.rating}
-                  </span>
-                  <span className="card-year">{content.year}</span>
+
+              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-green-600 rounded-lg">
+                    <Tv className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-bold text-white">
+                      {statistics.series.watched}
+                    </h3>
+                    <p className="text-gray-300">Series vistas</p>
+                    <span className="text-sm text-gray-400">
+                      de {statistics.series.total}
+                    </span>
+                  </div>
                 </div>
               </div>
+
+              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-purple-600 rounded-lg">
+                    <TrendingUp className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-bold text-white">
+                      {statistics.completionRate}%
+                    </h3>
+                    <p className="text-gray-300">Progreso total</p>
+                    <span className="text-sm text-gray-400">
+                      {statistics.totalWatched} contenidos
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-gray-800 rounded-lg p-6 border border-gray-700 hover:border-gray-600 transition-colors">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 bg-yellow-600 rounded-lg">
+                    <Star className="w-6 h-6 text-white" />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-2xl font-bold text-white">
+                      {Object.keys(statistics.platforms).length}
+                    </h3>
+                    <p className="text-gray-300">Plataformas</p>
+                    <span className="text-sm text-gray-400">utilizadas</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* Mi Lista - Contenido Principal */}
+        <section className="mb-8">
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+              📝 Mi Lista ({myListContent.length})
+            </h2>
+            <Link
+              to="/my-list"
+              className="text-red-400 hover:text-red-300 text-sm font-medium"
+            >
+              Ver todo →
             </Link>
-          ))}
-        </div>
-      </section>
+          </div>
 
-      {/* Quick Actions */}
-      <section className="actions-section">
-        <h2 className="section-title">🚀 Acciones Rápidas</h2>
-        <div className="actions-grid">
-          <Link to="/search" className="action-card">
-            <div className="action-icon">🔍</div>
-            <h3>Buscar Contenido</h3>
-            <p>Encuentra películas y series</p>
-          </Link>
+          {myListContent.length === 0 ? (
+            <div className="bg-gray-800 rounded-lg p-8 text-center">
+              <div className="text-4xl mb-4">📝</div>
+              <h3 className="text-xl font-bold mb-2">Tu lista está vacía</h3>
+              <p className="text-gray-400 mb-4">
+                Agrega películas y series a tu lista para verlas aquí
+              </p>
+              <div className="flex flex-wrap gap-4 justify-center">
+                <Link
+                  to="/movies"
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+                >
+                  Explorar Películas
+                </Link>
+                <Link
+                  to="/series"
+                  className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg"
+                >
+                  Explorar Series
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              {myListContent.map((content) => (
+                <div
+                  key={content.id}
+                  className="group relative bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-all duration-300 hover:scale-105"
+                >
+                  <div className="relative aspect-[2/3]">
+                    <img
+                      src={content.poster_url}
+                      alt={content.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src =
+                          "https://via.placeholder.com/300x450/333/fff?text=No+Image";
+                      }}
+                    />
 
-          <Link to="/my-list" className="action-card">
-            <div className="action-icon">📝</div>
-            <h3>Mi Lista</h3>
-            <p>Gestiona tu contenido</p>
-          </Link>
+                    {/* Status overlay */}
+                    <div
+                      className={`absolute top-2 left-2 px-2 py-1 rounded text-xs font-medium ${
+                        content.watched_status === "completed"
+                          ? "bg-green-600/80"
+                          : "bg-yellow-600/80"
+                      }`}
+                    >
+                      {getStatusText(content.watched_status)}
+                    </div>
 
-          <Link to="/profile" className="action-card">
-            <div className="action-icon">📊</div>
-            <h3>Estadísticas</h3>
-            <p>Ve tu progreso</p>
-          </Link>
-        </div>
-      </section>
+                    {/* Hover overlay with controls */}
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                      <div className="flex gap-2">
+                        <button
+                          onClick={(e) => handleMarkAsWatched(content, e)}
+                          className={`p-2 rounded-full transition-colors ${
+                            content.watched_status === "completed"
+                              ? "bg-yellow-600 hover:bg-yellow-700 text-white"
+                              : "bg-green-600 hover:bg-green-700 text-white"
+                          }`}
+                          title={
+                            content.watched_status === "completed"
+                              ? "Marcar como pendiente"
+                              : "Marcar como vista"
+                          }
+                        >
+                          {content.watched_status === "completed" ? (
+                            <Clock size={16} />
+                          ) : (
+                            <Check size={16} />
+                          )}
+                        </button>
+                        <button
+                          onClick={(e) => handleDelete(content, e)}
+                          className="p-2 bg-red-600 hover:bg-red-700 text-white rounded-full transition-colors"
+                          title="Eliminar de mi lista"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
 
-      <style jsx>{`
-        .home-page {
-          min-height: 100vh;
-          background: linear-gradient(135deg, #0f0f0f 0%, #1a1a1a 100%);
-          color: white;
-          padding: 20px;
-        }
+                  {/* Info section */}
+                  <div className="p-3">
+                    <h3 className="font-bold text-sm truncate mb-1">
+                      {content.title}
+                    </h3>
+                    <div className="flex items-center justify-between text-xs text-gray-400">
+                      <span className="flex items-center gap-1">
+                        <Star size={10} fill="currentColor" />
+                        {content.rating}
+                      </span>
+                      <span>{formatDuration(content)}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
 
-        .hero-section {
-          text-align: center;
-          padding: 60px 20px;
-          background: linear-gradient(45deg, #e50914, #f40612);
-          border-radius: 12px;
-          margin-bottom: 40px;
-        }
+        {/* Recent Content - Una sola fila */}
+        {recentContent.length > 0 && (
+          <section className="mb-8">
+            <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+              🆕 Contenido Reciente
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {recentContent.map((content) => (
+                <div
+                  key={content.id}
+                  className="bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-colors"
+                >
+                  <div className="relative aspect-[2/3]">
+                    <img
+                      src={content.poster_url}
+                      alt={content.title}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.src =
+                          "https://via.placeholder.com/300x450/333/fff?text=No+Image";
+                      }}
+                    />
+                  </div>
+                  <div className="p-3">
+                    <h3 className="font-bold text-sm truncate mb-1">
+                      {content.title}
+                    </h3>
+                    <div className="flex items-center justify-between text-xs text-gray-400">
+                      <span>{content.year}</span>
+                      <span className="flex items-center gap-1">
+                        <Star size={10} fill="currentColor" />
+                        {content.rating}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
-        .hero-title {
-          font-size: 2.5rem;
-          font-weight: bold;
-          margin-bottom: 16px;
-        }
+        {/* Quick Actions */}
+        <section className="mb-8">
+          <h2 className="text-2xl font-bold text-white mb-6 flex items-center gap-2">
+            🚀 Acciones Rápidas
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <Link
+              to="/search"
+              className="bg-gray-800 hover:bg-gray-700 rounded-lg p-6 text-center transition-colors group"
+            >
+              <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">
+                🔍
+              </div>
+              <h3 className="text-lg font-bold mb-2">Buscar Contenido</h3>
+              <p className="text-gray-400 text-sm">
+                Encuentra películas y series
+              </p>
+            </Link>
 
-        .hero-subtitle {
-          font-size: 1.2rem;
-          margin-bottom: 20px;
-          opacity: 0.9;
-        }
+            <Link
+              to="/my-list"
+              className="bg-gray-800 hover:bg-gray-700 rounded-lg p-6 text-center transition-colors group"
+            >
+              <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">
+                📝
+              </div>
+              <h3 className="text-lg font-bold mb-2">Mi Lista</h3>
+              <p className="text-gray-400 text-sm">Gestiona tu contenido</p>
+            </Link>
 
-        .demo-notice {
-          display: inline-flex;
-          align-items: center;
-          gap: 8px;
-          background: rgba(255, 255, 255, 0.2);
-          padding: 8px 16px;
-          border-radius: 20px;
-          font-size: 14px;
-        }
-
-        .section-title {
-          font-size: 1.8rem;
-          margin-bottom: 20px;
-          display: flex;
-          align-items: center;
-          gap: 8px;
-        }
-
-        .stats-section {
-          margin-bottom: 40px;
-        }
-
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-          gap: 20px;
-        }
-
-        .stat-card {
-          background: linear-gradient(135deg, #1f1f1f, #2a2a2a);
-          padding: 24px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          border: 1px solid rgba(229, 9, 20, 0.2);
-          transition: transform 0.3s ease;
-        }
-
-        .stat-card:hover {
-          transform: translateY(-2px);
-        }
-
-        .stat-icon {
-          background: #e50914;
-          color: white;
-          width: 50px;
-          height: 50px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .stat-info h3 {
-          font-size: 2rem;
-          font-weight: bold;
-          margin: 0;
-          color: #e50914;
-        }
-
-        .stat-info p {
-          margin: 4px 0;
-          color: #ccc;
-        }
-
-        .stat-total {
-          font-size: 12px;
-          color: #999;
-        }
-
-        .top-content-section {
-          margin-bottom: 40px;
-        }
-
-        .section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 20px;
-        }
-
-        .top-tabs {
-          display: flex;
-          gap: 8px;
-        }
-
-        .top-tab {
-          background: transparent;
-          border: 1px solid rgba(255, 255, 255, 0.3);
-          color: white;
-          padding: 8px 16px;
-          border-radius: 6px;
-          cursor: pointer;
-          display: flex;
-          align-items: center;
-          gap: 6px;
-          transition: all 0.3s ease;
-        }
-
-        .top-tab.active {
-          background: #e50914;
-          border-color: #e50914;
-        }
-
-        .top-content-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
-          gap: 20px;
-        }
-
-        .top-content-card {
-          background: linear-gradient(135deg, #1f1f1f, #2a2a2a);
-          border-radius: 12px;
-          overflow: hidden;
-          text-decoration: none;
-          color: white;
-          transition: transform 0.3s ease;
-          position: relative;
-        }
-
-        .top-content-card:hover {
-          transform: scale(1.02);
-        }
-
-        .rank-badge {
-          position: absolute;
-          top: 12px;
-          left: 12px;
-          background: #e50914;
-          color: white;
-          width: 32px;
-          height: 32px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-weight: bold;
-          z-index: 2;
-        }
-
-        .content-poster {
-          height: 200px;
-          overflow: hidden;
-        }
-
-        .content-poster img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .content-info {
-          padding: 16px;
-        }
-
-        .content-info h3 {
-          margin: 0 0 8px 0;
-          font-size: 1.1rem;
-        }
-
-        .content-meta {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          margin-bottom: 8px;
-        }
-
-        .rating {
-          display: flex;
-          align-items: center;
-          gap: 4px;
-          color: #fbbf24;
-        }
-
-        .content-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-          gap: 20px;
-        }
-
-        .content-card {
-          text-decoration: none;
-          color: white;
-          transition: transform 0.3s ease;
-        }
-
-        .content-card:hover {
-          transform: scale(1.05);
-        }
-
-        .card-poster {
-          position: relative;
-          height: 250px;
-          border-radius: 8px;
-          overflow: hidden;
-        }
-
-        .card-poster img {
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-        }
-
-        .card-overlay {
-          position: absolute;
-          top: 8px;
-          right: 8px;
-        }
-
-        .card-type {
-          background: rgba(0, 0, 0, 0.8);
-          padding: 4px 8px;
-          border-radius: 4px;
-          font-size: 12px;
-        }
-
-        .card-info {
-          padding: 12px 0;
-        }
-
-        .card-info h4 {
-          margin: 0 0 8px 0;
-          font-size: 0.9rem;
-        }
-
-        .card-meta {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          font-size: 12px;
-          color: #ccc;
-        }
-
-        .card-rating {
-          display: flex;
-          align-items: center;
-          gap: 2px;
-          color: #fbbf24;
-        }
-
-        .actions-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-          gap: 20px;
-        }
-
-        .action-card {
-          background: linear-gradient(135deg, #1f1f1f, #2a2a2a);
-          padding: 24px;
-          border-radius: 12px;
-          text-decoration: none;
-          color: white;
-          text-align: center;
-          transition: transform 0.3s ease;
-          border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .action-card:hover {
-          transform: translateY(-4px);
-          border-color: #e50914;
-        }
-
-        .action-icon {
-          font-size: 3rem;
-          margin-bottom: 16px;
-        }
-
-        .action-card h3 {
-          margin: 0 0 8px 0;
-          color: #e50914;
-        }
-
-        .action-card p {
-          margin: 0;
-          color: #ccc;
-          font-size: 14px;
-        }
-
-        .see-all-link {
-          color: #e50914;
-          text-decoration: none;
-          font-weight: 500;
-        }
-
-        .see-all-link:hover {
-          text-decoration: underline;
-        }
-
-        /* Responsive */
-        @media (max-width: 768px) {
-          .home-page {
-            padding: 16px;
-          }
-
-          .hero-title {
-            font-size: 2rem;
-          }
-
-          .hero-subtitle {
-            font-size: 1rem;
-          }
-
-          .stats-grid {
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-          }
-
-          .top-content-grid {
-            grid-template-columns: 1fr;
-          }
-
-          .section-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 12px;
-          }
-        }
-      `}</style>
+            <Link
+              to="/profile"
+              className="bg-gray-800 hover:bg-gray-700 rounded-lg p-6 text-center transition-colors group"
+            >
+              <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">
+                👤
+              </div>
+              <h3 className="text-lg font-bold mb-2">Mi Perfil</h3>
+              <p className="text-gray-400 text-sm">Configurar preferencias</p>
+            </Link>
+          </div>
+        </section>
+      </div>
     </div>
   );
 };

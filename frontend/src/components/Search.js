@@ -1,540 +1,713 @@
 import {
-  Calendar,
   Film,
-  Filter,
-  Grid,
-  List,
-  Play,
+  Loader2,
   Plus,
   Search as SearchIcon,
   Star,
   Tv,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
 import demoApiService from "../services/demoApiService";
 import LoadingSpinner from "./LoadingSpinner";
 
 const Search = () => {
-  const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const searchInputRef = useRef(null);
+  const dropdownRef = useRef(null);
 
   // Estados principales
-  const [searchTerm, setSearchTerm] = useState(searchParams.get("q") || "");
-  const [content, setContent] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
+
+  // Estados de contenido local
+  const [localContent, setLocalContent] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [viewMode, setViewMode] = useState("grid"); // 'grid' o 'list'
-  const [showFilters, setShowFilters] = useState(false);
 
   // Estados de filtros
   const [filters, setFilters] = useState({
-    type: searchParams.get("type") || "",
-    genre: searchParams.get("genre") || "",
-    platform: searchParams.get("platform") || "",
-    year: searchParams.get("year") || "",
-    rating: searchParams.get("rating") || "",
-    status: searchParams.get("status") || "", // 'watched', 'mylist', 'all'
+    type: "",
+    genre: "",
+    year: "",
   });
 
-  // Opciones para filtros
-  const filterOptions = {
-    types: [
-      { value: "", label: "Todos los tipos" },
-      { value: "movie", label: "Películas" },
-      { value: "series", label: "Series" },
-    ],
-    genres: [
-      { value: "", label: "Todos los géneros" },
-      { value: "Acción", label: "Acción" },
-      { value: "Aventura", label: "Aventura" },
-      { value: "Comedia", label: "Comedia" },
-      { value: "Drama", label: "Drama" },
-      { value: "Ciencia Ficción", label: "Ciencia Ficción" },
-      { value: "Terror", label: "Terror" },
-      { value: "Romance", label: "Romance" },
-      { value: "Thriller", label: "Thriller" },
-      { value: "Fantasía", label: "Fantasía" },
-      { value: "Animación", label: "Animación" },
-    ],
-    platforms: [
-      { value: "", label: "Todas las plataformas" },
-      { value: "Netflix", label: "Netflix" },
-      { value: "Disney+", label: "Disney+" },
-      { value: "Prime Video", label: "Prime Video" },
-      { value: "HBO Max", label: "HBO Max" },
-      { value: "Apple TV+", label: "Apple TV+" },
-      { value: "Hulu", label: "Hulu" },
-      { value: "Paramount+", label: "Paramount+" },
-      { value: "Crunchyroll", label: "Crunchyroll" },
-    ],
-    years: [
-      { value: "", label: "Todos los años" },
-      { value: "2024", label: "2024" },
-      { value: "2023", label: "2023" },
-      { value: "2022", label: "2022" },
-      { value: "2021", label: "2021" },
-      { value: "2020", label: "2020" },
-    ],
-    ratings: [
-      { value: "", label: "Todas las calificaciones" },
-      { value: "9", label: "9+ ⭐" },
-      { value: "8", label: "8+ ⭐" },
-      { value: "7", label: "7+ ⭐" },
-      { value: "6", label: "6+ ⭐" },
-    ],
-    statuses: [
-      { value: "", label: "Todo el contenido" },
-      { value: "watched", label: "Ya visto" },
-      { value: "mylist", label: "En mi lista" },
-      { value: "unwatched", label: "Sin ver" },
-    ],
-  };
-
-  // Cargar contenido inicial
+  // Cargar contenido local al iniciar
   useEffect(() => {
-    loadContent();
+    loadLocalContent();
   }, []);
 
-  // Actualizar URL cuando cambien los filtros
+  // Búsqueda de sugerencias con debounce
   useEffect(() => {
-    const params = new URLSearchParams();
-    if (searchTerm) params.set("q", searchTerm);
-    if (filters.type) params.set("type", filters.type);
-    if (filters.genre) params.set("genre", filters.genre);
-    if (filters.platform) params.set("platform", filters.platform);
-    if (filters.year) params.set("year", filters.year);
-    if (filters.rating) params.set("rating", filters.rating);
-    if (filters.status) params.set("status", filters.status);
+    const delayedSearch = setTimeout(() => {
+      if (searchTerm.length >= 2) {
+        searchSuggestions(searchTerm);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
+      }
+    }, 300);
 
-    setSearchParams(params);
-  }, [searchTerm, filters, setSearchParams]);
+    return () => clearTimeout(delayedSearch);
+  }, [searchTerm]);
 
-  const loadContent = async () => {
+  // Cerrar dropdown al hacer clic fuera
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setShowSuggestions(false);
+        setSelectedSuggestion(-1);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const loadLocalContent = async () => {
     try {
       setLoading(true);
-      const allContent = await demoApiService.getAllContent();
-      setContent(allContent);
+      const response = await demoApiService.getContent();
+      if (response.success) {
+        setLocalContent(response.data);
+      }
     } catch (error) {
-      console.error("Error cargando contenido:", error);
+      console.error("Error loading local content:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  // Filtrar contenido
-  const filteredContent = useMemo(() => {
-    let result = [...content];
-
-    // Filtro por término de búsqueda
-    if (searchTerm) {
-      const term = searchTerm.toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.title.toLowerCase().includes(term) ||
-          item.genre.toLowerCase().includes(term) ||
-          item.platform.toLowerCase().includes(term)
-      );
-    }
-
-    // Filtro por tipo
-    if (filters.type) {
-      result = result.filter((item) => item.type === filters.type);
-    }
-
-    // Filtro por género
-    if (filters.genre) {
-      result = result.filter((item) => item.genre === filters.genre);
-    }
-
-    // Filtro por plataforma
-    if (filters.platform) {
-      result = result.filter((item) => item.platform === filters.platform);
-    }
-
-    // Filtro por año
-    if (filters.year) {
-      result = result.filter((item) => item.year.toString() === filters.year);
-    }
-
-    // Filtro por calificación
-    if (filters.rating) {
-      const minRating = parseFloat(filters.rating);
-      result = result.filter((item) => item.rating >= minRating);
-    }
-
-    // Filtro por estado
-    if (filters.status) {
-      const myList = JSON.parse(
-        localStorage.getItem("movieflix_mylist") || "[]"
-      );
-      const watched = JSON.parse(
-        localStorage.getItem("movieflix_watched") || "[]"
-      );
-
-      switch (filters.status) {
-        case "watched":
-          result = result.filter((item) =>
-            watched.some((w) => w.id === item.id)
-          );
-          break;
-        case "mylist":
-          result = result.filter((item) =>
-            myList.some((m) => m.id === item.id)
-          );
-          break;
-        case "unwatched":
-          result = result.filter(
-            (item) => !watched.some((w) => w.id === item.id)
-          );
-          break;
-      }
-    }
-
-    return result;
-  }, [content, searchTerm, filters]);
-
-  const handleFilterChange = (filterType, value) => {
-    setFilters((prev) => ({
-      ...prev,
-      [filterType]: value,
-    }));
-  };
-
-  const clearFilters = () => {
-    setFilters({
-      type: "",
-      genre: "",
-      platform: "",
-      year: "",
-      rating: "",
-      status: "",
-    });
-    setSearchTerm("");
-  };
-
-  const handleAddToList = async (contentId) => {
+  const searchSuggestions = async (query) => {
     try {
-      await demoApiService.addToMyList(contentId);
-      // Recargar contenido para actualizar estado
-      loadContent();
+      setSearchLoading(true);
+      const response = await demoApiService.searchContent(query);
+      if (response.success) {
+        setSuggestions(response.data);
+        setShowSuggestions(true);
+      }
     } catch (error) {
-      console.error("Error añadiendo a Mi Lista:", error);
+      console.error("Error searching suggestions:", error);
+      setSuggestions([]);
+    } finally {
+      setSearchLoading(false);
     }
   };
+
+  const handleSearchInput = (e) => {
+    setSearchTerm(e.target.value);
+    setSelectedSuggestion(-1);
+  };
+
+  const handleKeyDown = (e) => {
+    if (!showSuggestions || suggestions.length === 0) return;
+
+    switch (e.key) {
+      case "ArrowDown":
+        e.preventDefault();
+        setSelectedSuggestion((prev) =>
+          prev < suggestions.length - 1 ? prev + 1 : prev
+        );
+        break;
+      case "ArrowUp":
+        e.preventDefault();
+        setSelectedSuggestion((prev) => (prev > 0 ? prev - 1 : -1));
+        break;
+      case "Enter":
+        e.preventDefault();
+        if (selectedSuggestion >= 0) {
+          selectSuggestion(suggestions[selectedSuggestion]);
+        }
+        break;
+      case "Escape":
+        setShowSuggestions(false);
+        setSelectedSuggestion(-1);
+        break;
+      default:
+        break;
+    }
+  };
+
+  const selectSuggestion = (suggestion) => {
+    setSearchTerm(suggestion.title);
+    setShowSuggestions(false);
+    setSelectedSuggestion(-1);
+  };
+
+  const addToMyList = async (suggestion, e) => {
+    e.stopPropagation();
+    try {
+      const response = await demoApiService.addContentFromSearch(suggestion);
+      if (response.success) {
+        alert(`"${suggestion.title}" añadido a tu lista`);
+        loadLocalContent(); // Recargar contenido local
+      } else {
+        alert("Error al añadir contenido: " + response.message);
+      }
+    } catch (error) {
+      console.error("Error adding to list:", error);
+      alert("Error al añadir contenido");
+    }
+  };
+
+  const clearSearch = () => {
+    setSearchTerm("");
+    setSuggestions([]);
+    setShowSuggestions(false);
+    searchInputRef.current?.focus();
+  };
+
+  const filteredLocalContent = localContent.filter((item) => {
+    const matchesType = !filters.type || item.type === filters.type;
+    const matchesGenre =
+      !filters.genre || (item.genres && item.genres.includes(filters.genre));
+    const matchesYear = !filters.year || item.year?.toString() === filters.year;
+    const matchesSearch =
+      !searchTerm ||
+      item.title?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.title_en?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    return matchesType && matchesGenre && matchesYear && matchesSearch;
+  });
 
   if (loading) {
-    return <LoadingSpinner />;
+    return <LoadingSpinner message="Cargando búsqueda..." />;
   }
 
   return (
-    <div className="min-h-screen bg-gray-900 text-white">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-6 flex items-center gap-3">
-            <SearchIcon className="w-8 h-8 text-red-500" />
-            Buscar Contenido
-          </h1>
+    <div className="search-page">
+      {/* Header de búsqueda */}
+      <div className="search-header">
+        <h1 className="page-title">
+          <SearchIcon size={24} />
+          Buscar Contenido
+        </h1>
 
-          {/* Barra de búsqueda */}
-          <div className="relative mb-6">
-            <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+        {/* Barra de búsqueda principal con dropdown */}
+        <div className="search-container" ref={dropdownRef}>
+          <div className="search-input-wrapper">
+            <SearchIcon size={20} className="search-icon" />
             <input
+              ref={searchInputRef}
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="Buscar películas, series, géneros, plataformas..."
-              className="w-full bg-gray-800 text-white pl-10 pr-4 py-3 rounded-lg border border-gray-700 focus:border-red-500 focus:outline-none"
+              onChange={handleSearchInput}
+              onKeyDown={handleKeyDown}
+              placeholder="Busca películas y series..."
+              className="search-input"
             />
             {searchTerm && (
-              <button
-                onClick={() => setSearchTerm("")}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white"
-              >
-                <X className="w-5 h-5" />
+              <button onClick={clearSearch} className="clear-search">
+                <X size={16} />
               </button>
+            )}
+            {searchLoading && (
+              <div className="search-loading">
+                <Loader2 size={16} className="animate-spin" />
+              </div>
             )}
           </div>
 
-          {/* Controles */}
-          <div className="flex flex-wrap items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setShowFilters(!showFilters)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                  showFilters
-                    ? "bg-red-600 hover:bg-red-700"
-                    : "bg-gray-800 hover:bg-gray-700"
-                }`}
-              >
-                <Filter className="w-4 h-4" />
-                Filtros
-              </button>
-
-              {(Object.values(filters).some((f) => f) || searchTerm) && (
-                <button
-                  onClick={clearFilters}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition-colors text-sm"
-                >
-                  <X className="w-4 h-4" />
-                  Limpiar
-                </button>
-              )}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-400">
-                {filteredContent.length} resultados
-              </span>
-              <div className="flex bg-gray-800 rounded-lg p-1">
-                <button
-                  onClick={() => setViewMode("grid")}
-                  className={`p-2 rounded ${
-                    viewMode === "grid" ? "bg-red-600" : "hover:bg-gray-700"
+          {/* Dropdown de sugerencias */}
+          {showSuggestions && suggestions.length > 0 && (
+            <div className="suggestions-dropdown">
+              {suggestions.map((suggestion, index) => (
+                <div
+                  key={suggestion.id}
+                  className={`suggestion-item ${
+                    index === selectedSuggestion ? "selected" : ""
                   }`}
+                  onClick={() => selectSuggestion(suggestion)}
                 >
-                  <Grid className="w-4 h-4" />
-                </button>
-                <button
-                  onClick={() => setViewMode("list")}
-                  className={`p-2 rounded ${
-                    viewMode === "list" ? "bg-red-600" : "hover:bg-gray-700"
-                  }`}
-                >
-                  <List className="w-4 h-4" />
-                </button>
-              </div>
+                  <div className="suggestion-poster">
+                    <img
+                      src={suggestion.poster_url}
+                      alt={suggestion.title}
+                      onError={(e) => {
+                        e.target.src =
+                          "https://via.placeholder.com/50x75/333/fff?text=No+Image";
+                      }}
+                    />
+                  </div>
+                  <div className="suggestion-info">
+                    <div className="suggestion-title">{suggestion.title}</div>
+                    <div className="suggestion-meta">
+                      <span className="suggestion-year">{suggestion.year}</span>
+                      <span className="suggestion-type">
+                        {suggestion.type === "movie" ? (
+                          <Film size={12} />
+                        ) : (
+                          <Tv size={12} />
+                        )}
+                        {suggestion.type === "movie" ? "Película" : "Serie"}
+                      </span>
+                      <span className="suggestion-rating">
+                        <Star size={12} fill="currentColor" />
+                        {suggestion.rating}
+                      </span>
+                    </div>
+                    {suggestion.overview && (
+                      <div className="suggestion-overview">
+                        {suggestion.overview.slice(0, 100)}...
+                      </div>
+                    )}
+                  </div>
+                  <button
+                    className="add-to-list-btn"
+                    onClick={(e) => addToMyList(suggestion, e)}
+                    title="Añadir a mi lista"
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
+              ))}
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Panel de filtros */}
-        {showFilters && (
-          <div className="bg-gray-800 p-6 rounded-xl mb-8">
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {/* Filtro por tipo */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Tipo de contenido
-                </label>
-                <select
-                  value={filters.type}
-                  onChange={(e) => handleFilterChange("type", e.target.value)}
-                  className="w-full bg-gray-700 text-white p-2 rounded-lg border border-gray-600 focus:border-red-500 focus:outline-none"
-                >
-                  {filterOptions.types.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filtro por género */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Género</label>
-                <select
-                  value={filters.genre}
-                  onChange={(e) => handleFilterChange("genre", e.target.value)}
-                  className="w-full bg-gray-700 text-white p-2 rounded-lg border border-gray-600 focus:border-red-500 focus:outline-none"
-                >
-                  {filterOptions.genres.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filtro por plataforma */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Plataforma
-                </label>
-                <select
-                  value={filters.platform}
-                  onChange={(e) =>
-                    handleFilterChange("platform", e.target.value)
-                  }
-                  className="w-full bg-gray-700 text-white p-2 rounded-lg border border-gray-600 focus:border-red-500 focus:outline-none"
-                >
-                  {filterOptions.platforms.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filtro por año */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Año</label>
-                <select
-                  value={filters.year}
-                  onChange={(e) => handleFilterChange("year", e.target.value)}
-                  className="w-full bg-gray-700 text-white p-2 rounded-lg border border-gray-600 focus:border-red-500 focus:outline-none"
-                >
-                  {filterOptions.years.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filtro por calificación */}
-              <div>
-                <label className="block text-sm font-medium mb-2">
-                  Calificación mínima
-                </label>
-                <select
-                  value={filters.rating}
-                  onChange={(e) => handleFilterChange("rating", e.target.value)}
-                  className="w-full bg-gray-700 text-white p-2 rounded-lg border border-gray-600 focus:border-red-500 focus:outline-none"
-                >
-                  {filterOptions.ratings.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Filtro por estado */}
-              <div>
-                <label className="block text-sm font-medium mb-2">Estado</label>
-                <select
-                  value={filters.status}
-                  onChange={(e) => handleFilterChange("status", e.target.value)}
-                  className="w-full bg-gray-700 text-white p-2 rounded-lg border border-gray-600 focus:border-red-500 focus:outline-none"
-                >
-                  {filterOptions.statuses.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Resultados */}
-        {filteredContent.length === 0 ? (
-          <div className="text-center py-12">
-            <SearchIcon className="w-16 h-16 text-gray-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold mb-2">
-              No se encontraron resultados
-            </h3>
-            <p className="text-gray-400 mb-4">
-              Intenta ajustar los filtros o el término de búsqueda
-            </p>
-            {(Object.values(filters).some((f) => f) || searchTerm) && (
-              <button
-                onClick={clearFilters}
-                className="bg-red-600 hover:bg-red-700 px-6 py-3 rounded-lg transition-colors"
-              >
-                Limpiar filtros
-              </button>
-            )}
-          </div>
-        ) : (
-          <div
-            className={
-              viewMode === "grid"
-                ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6"
-                : "space-y-4"
+        {/* Filtros rápidos */}
+        <div className="quick-filters">
+          <select
+            value={filters.type}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, type: e.target.value }))
             }
+            className="filter-select"
           >
-            {filteredContent.map((item) => (
-              <div
-                key={item.id}
-                className={`bg-gray-800 rounded-xl overflow-hidden hover:bg-gray-700 transition-colors cursor-pointer ${
-                  viewMode === "list" ? "flex gap-4 p-4" : ""
-                }`}
-                onClick={() => navigate(`/content/${item.id}`)}
-              >
-                <img
-                  src={item.poster}
-                  alt={item.title}
-                  className={`object-cover ${
-                    viewMode === "grid"
-                      ? "w-full aspect-[2/3]"
-                      : "w-20 h-28 rounded-lg"
-                  }`}
-                  onError={(e) => {
-                    e.target.src =
-                      "https://via.placeholder.com/300x450/374151/ffffff?text=Sin+Imagen";
-                  }}
-                />
+            <option value="">Todos los tipos</option>
+            <option value="movie">Películas</option>
+            <option value="series">Series</option>
+          </select>
 
-                <div className={viewMode === "grid" ? "p-4" : "flex-1"}>
-                  <div className="flex items-center gap-2 mb-2">
+          <select
+            value={filters.genre}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, genre: e.target.value }))
+            }
+            className="filter-select"
+          >
+            <option value="">Todos los géneros</option>
+            <option value="Acción">Acción</option>
+            <option value="Aventura">Aventura</option>
+            <option value="Comedia">Comedia</option>
+            <option value="Drama">Drama</option>
+            <option value="Terror">Terror</option>
+            <option value="Ciencia Ficción">Ciencia Ficción</option>
+            <option value="Romance">Romance</option>
+            <option value="Thriller">Thriller</option>
+          </select>
+
+          <input
+            type="number"
+            placeholder="Año"
+            value={filters.year}
+            onChange={(e) =>
+              setFilters((prev) => ({ ...prev, year: e.target.value }))
+            }
+            className="filter-input"
+            min="1900"
+            max="2030"
+          />
+        </div>
+      </div>
+
+      {/* Resultados del contenido local */}
+      {filteredLocalContent.length > 0 && (
+        <div className="local-results">
+          <h2 className="results-title">
+            Tu Contenido ({filteredLocalContent.length})
+          </h2>
+          <div className="content-grid">
+            {filteredLocalContent.map((item) => (
+              <div key={item.id} className="content-card">
+                <div className="card-poster">
+                  <img
+                    src={item.poster_url || item.poster_path}
+                    alt={item.title}
+                    onError={(e) => {
+                      e.target.src =
+                        "https://via.placeholder.com/200x300/333/fff?text=No+Image";
+                    }}
+                  />
+                  <div className="card-overlay">
+                    <div className="card-type">
+                      {item.type === "movie" ? (
+                        <Film size={16} />
+                      ) : (
+                        <Tv size={16} />
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <div className="card-info">
+                  <h4>{item.title}</h4>
+                  <div className="card-meta">
+                    <span className="card-rating">
+                      <Star size={12} fill="currentColor" />
+                      {item.rating}
+                    </span>
+                    <span className="card-year">{item.year}</span>
+                  </div>
+                  <div className="card-duration">
                     {item.type === "movie" ? (
-                      <Film className="w-4 h-4 text-red-500" />
+                      <span>{item.runtime || "120"} min</span>
                     ) : (
-                      <Tv className="w-4 h-4 text-blue-500" />
+                      <span>
+                        {item.seasons || "1"} temp. • {item.runtime || "45"}{" "}
+                        min/ep
+                      </span>
                     )}
-                    <span className="text-xs text-gray-400 uppercase font-semibold">
-                      {item.type === "movie" ? "Película" : "Serie"}
-                    </span>
                   </div>
-
-                  <h3 className="font-semibold mb-2 line-clamp-2">
-                    {item.title}
-                  </h3>
-
-                  <div className="space-y-1 text-sm text-gray-400">
-                    <div className="flex items-center gap-2">
-                      <Star className="w-4 h-4 text-yellow-500" />
-                      <span>{item.rating}/10</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Calendar className="w-4 h-4" />
-                      <span>{item.year}</span>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <span className="bg-gray-700 px-2 py-1 rounded text-xs">
-                      {item.genre}
-                    </span>
-                    <span className="bg-red-600 px-2 py-1 rounded text-xs">
-                      {item.platform}
-                    </span>
-                  </div>
-
-                  {viewMode === "list" && (
-                    <div className="mt-4 flex gap-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/content/${item.id}`);
-                        }}
-                        className="flex items-center gap-1 bg-red-600 hover:bg-red-700 px-3 py-1 rounded text-sm transition-colors"
-                      >
-                        <Play className="w-3 h-3" />
-                        Ver
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleAddToList(item.id);
-                        }}
-                        className="flex items-center gap-1 bg-gray-600 hover:bg-gray-500 px-3 py-1 rounded text-sm transition-colors"
-                      >
-                        <Plus className="w-3 h-3" />
-                        Lista
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Mensaje cuando no hay resultados */}
+      {searchTerm &&
+        filteredLocalContent.length === 0 &&
+        suggestions.length === 0 &&
+        !searchLoading && (
+          <div className="no-results">
+            <SearchIcon size={48} />
+            <h3>No se encontraron resultados</h3>
+            <p>Intenta con otros términos de búsqueda</p>
+          </div>
         )}
-      </div>
+
+      <style jsx>{`
+        .search-page {
+          padding: 24px;
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+
+        .search-header {
+          margin-bottom: 32px;
+        }
+
+        .page-title {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          font-size: 2rem;
+          font-weight: 600;
+          color: #e50914;
+          margin-bottom: 24px;
+        }
+
+        .search-container {
+          position: relative;
+          margin-bottom: 20px;
+        }
+
+        .search-input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+        }
+
+        .search-input {
+          width: 100%;
+          padding: 16px 50px 16px 50px;
+          font-size: 16px;
+          background: #2a2a2a;
+          border: 2px solid #404040;
+          border-radius: 8px;
+          color: white;
+          transition: border-color 0.3s ease;
+        }
+
+        .search-input:focus {
+          outline: none;
+          border-color: #e50914;
+        }
+
+        .search-icon {
+          position: absolute;
+          left: 16px;
+          color: #ccc;
+        }
+
+        .clear-search {
+          position: absolute;
+          right: 48px;
+          background: none;
+          border: none;
+          color: #ccc;
+          cursor: pointer;
+          padding: 4px;
+          border-radius: 4px;
+        }
+
+        .clear-search:hover {
+          color: white;
+          background: #404040;
+        }
+
+        .search-loading {
+          position: absolute;
+          right: 16px;
+          color: #e50914;
+        }
+
+        .suggestions-dropdown {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          right: 0;
+          background: #2a2a2a;
+          border: 1px solid #404040;
+          border-radius: 8px;
+          max-height: 400px;
+          overflow-y: auto;
+          z-index: 1000;
+          margin-top: 4px;
+        }
+
+        .suggestion-item {
+          display: flex;
+          align-items: flex-start;
+          gap: 12px;
+          padding: 12px;
+          border-bottom: 1px solid #404040;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+
+        .suggestion-item:hover,
+        .suggestion-item.selected {
+          background: #404040;
+        }
+
+        .suggestion-item:last-child {
+          border-bottom: none;
+        }
+
+        .suggestion-poster {
+          width: 50px;
+          height: 75px;
+          border-radius: 4px;
+          overflow: hidden;
+          flex-shrink: 0;
+        }
+
+        .suggestion-poster img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .suggestion-info {
+          flex: 1;
+          min-width: 0;
+        }
+
+        .suggestion-title {
+          font-weight: 600;
+          margin-bottom: 4px;
+          color: white;
+        }
+
+        .suggestion-meta {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          color: #ccc;
+          margin-bottom: 4px;
+        }
+
+        .suggestion-type {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+        }
+
+        .suggestion-rating {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          color: #fbbf24;
+        }
+
+        .suggestion-overview {
+          font-size: 12px;
+          color: #999;
+          line-height: 1.4;
+        }
+
+        .add-to-list-btn {
+          background: #e50914;
+          border: none;
+          color: white;
+          padding: 8px;
+          border-radius: 4px;
+          cursor: pointer;
+          transition: background 0.2s ease;
+          flex-shrink: 0;
+        }
+
+        .add-to-list-btn:hover {
+          background: #cc0c1c;
+        }
+
+        .quick-filters {
+          display: flex;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+
+        .filter-select,
+        .filter-input {
+          padding: 8px 12px;
+          background: #2a2a2a;
+          border: 1px solid #404040;
+          border-radius: 4px;
+          color: white;
+          font-size: 14px;
+        }
+
+        .filter-select:focus,
+        .filter-input:focus {
+          outline: none;
+          border-color: #e50914;
+        }
+
+        .results-title {
+          font-size: 1.5rem;
+          font-weight: 600;
+          margin-bottom: 20px;
+          color: white;
+        }
+
+        .content-grid {
+          display: grid;
+          grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+          gap: 20px;
+        }
+
+        .content-card {
+          background: #1a1a1a;
+          border-radius: 8px;
+          overflow: hidden;
+          transition: transform 0.3s ease;
+        }
+
+        .content-card:hover {
+          transform: translateY(-4px);
+        }
+
+        .card-poster {
+          position: relative;
+          aspect-ratio: 2/3;
+          overflow: hidden;
+        }
+
+        .card-poster img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .card-overlay {
+          position: absolute;
+          top: 8px;
+          left: 8px;
+          background: rgba(0, 0, 0, 0.8);
+          padding: 4px 8px;
+          border-radius: 4px;
+        }
+
+        .card-type {
+          display: flex;
+          align-items: center;
+          gap: 4px;
+          color: white;
+          font-size: 12px;
+        }
+
+        .card-info {
+          padding: 12px;
+        }
+
+        .card-info h4 {
+          margin: 0 0 8px 0;
+          font-size: 0.9rem;
+        }
+
+        .card-meta {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-size: 12px;
+          color: #ccc;
+          margin-bottom: 4px;
+        }
+
+        .card-rating {
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          color: #fbbf24;
+        }
+
+        .card-duration {
+          font-size: 11px;
+          color: #999;
+        }
+
+        .no-results {
+          text-align: center;
+          padding: 60px 20px;
+          color: #ccc;
+        }
+
+        .no-results svg {
+          opacity: 0.5;
+          margin-bottom: 20px;
+        }
+
+        .no-results h3 {
+          margin: 0 0 8px 0;
+          color: white;
+        }
+
+        .animate-spin {
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from {
+            transform: rotate(0deg);
+          }
+          to {
+            transform: rotate(360deg);
+          }
+        }
+
+        @media (max-width: 768px) {
+          .search-page {
+            padding: 16px;
+          }
+
+          .page-title {
+            font-size: 1.5rem;
+          }
+
+          .quick-filters {
+            flex-direction: column;
+          }
+
+          .content-grid {
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 16px;
+          }
+        }
+      `}</style>
     </div>
   );
 };

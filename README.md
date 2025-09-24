@@ -181,7 +181,7 @@ MovieFlix-demo/
 
 ### Home Dashboard
 
-![Home][https://via.placeholder.com/800x400/1a1a1a/ffffff?text=MovieFlix+Home+Dashboard](https://movie-demo.duckdns.org/]
+https://movie-demo.duckdns.org/
 
 ## 🔒 Security Features
 

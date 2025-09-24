@@ -181,15 +181,7 @@ MovieFlix-demo/
 
 ### Home Dashboard
 
-![Home](https://via.placeholder.com/800x400/1a1a1a/ffffff?text=MovieFlix+Home+Dashboard)
-
-### Content Detail View
-
-![Detail](https://via.placeholder.com/800x400/1a1a1a/ffffff?text=Content+Detail+View)
-
-### Advanced Search
-
-![Search](https://via.placeholder.com/800x400/1a1a1a/ffffff?text=Advanced+Search+Filters)
+![Home][https://via.placeholder.com/800x400/1a1a1a/ffffff?text=MovieFlix+Home+Dashboard](https://movie-demo.duckdns.org/]
 
 ## 🔒 Security Features
 

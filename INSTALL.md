@@ -96,10 +96,10 @@ sudo mkdir -p /opt/movieflix/{backend,frontend,logs,backups}
 ```bash
 # Si tienes un repositorio
 git clone https://github.com/tu-usuario/movieflix.git /tmp/movieflix
-sudo cp -r /tmp/movieflix/* /opt/movieflix/
+sudo cp -r /tmp/movieflix/. /opt/movieflix/
 
 # O copiar archivos manualmente
-sudo cp -r ./MovieFlix/* /opt/movieflix/
+sudo cp -r ./MovieFlix/. /opt/movieflix/
 ```
 
 ### 2. Instalar dependencias del backend

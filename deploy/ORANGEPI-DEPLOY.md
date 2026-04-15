@@ -7,7 +7,7 @@ Este proyecto queda desplegado como web estatica (sin backend, sin base de datos
 1. Verificar estado del host:
 
 ```bash
-/home/casa74b/scripts/health-check.sh
+<ruta-scripts-seguridad>/health-check.sh
 sudo ufw status verbose
 sudo fail2ban-client status sshd
 ```
@@ -21,7 +21,7 @@ docker network inspect traefik-public >/dev/null
 3. Backup rapido de configuracion de Traefik:
 
 ```bash
-cp /mnt/data/docker/traefik/docker-compose.yml /mnt/data/backups/traefik-compose-$(date +%F-%H%M).yml
+cp <ruta-traefik>/docker-compose.yml <ruta-backups>/traefik-compose-$(date +%F-%H%M).yml
 ```
 
 ## 2. Publicar DNS en DuckDNS
@@ -29,11 +29,11 @@ cp /mnt/data/docker/traefik/docker-compose.yml /mnt/data/backups/traefik-compose
 No guardar el token en el repositorio.
 
 ```bash
-cd /mnt/data/www/MovieFlix-demo/deploy
+cd <ruta-del-proyecto>/MovieFlix-demo/deploy
 chmod +x duckdns-update-movie-demo.sh
 export DUCKDNS_TOKEN="<token-duckdns-account1>"
 export DUCKDNS_DOMAIN="movie-demo"
-export DUCKDNS_IP="80.102.148.90"
+export DUCKDNS_IP="<ip-publica-del-servidor>"
 ./duckdns-update-movie-demo.sh
 ```
 
@@ -43,12 +43,12 @@ Validar resolucion:
 dig +short movie-demo.duckdns.org
 ```
 
-Debe devolver `80.102.148.90`.
+Debe devolver la IP publica del servidor.
 
 ## 3. Deploy del stack
 
 ```bash
-cd /mnt/data/www/MovieFlix-demo
+cd <ruta-del-proyecto>/MovieFlix-demo
 chmod +x deploy/deploy-orangepi.sh
 ./deploy/deploy-orangepi.sh
 ```
@@ -74,12 +74,12 @@ curl -I https://movie-demo.duckdns.org | egrep -i "x-frame-options|x-content-typ
 
 ```bash
 docker compose logs --tail 100
-cat /mnt/data/docker/traefik/logs/access.log | tail -50
+cat <ruta-traefik-logs>/access.log | tail -50
 ```
 
 ## 6. Rollback rapido
 
 ```bash
-cd /mnt/data/www/MovieFlix-demo
+cd <ruta-del-proyecto>/MovieFlix-demo
 docker compose down
 ```

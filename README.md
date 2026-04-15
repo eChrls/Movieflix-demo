@@ -3,6 +3,7 @@
 MovieFlix Demo es una aplicacion web estilo IMDb para explorar un catalogo de peliculas y series.
 
 Estado actual del proyecto:
+
 - Frontend React con datos persistidos solo en LocalStorage.
 - Sin API externa en tiempo de ejecucion.
 - Sin base de datos.
@@ -11,6 +12,7 @@ Estado actual del proyecto:
 ## Objetivo
 
 Proveer una demo funcional, usable y portable para portfolio tecnico, centrada en:
+
 - Navegacion por catalogo.
 - Fichas de detalle.
 - Busqueda y filtros.
@@ -44,6 +46,7 @@ MovieFlix-demo/
 ## Desarrollo local
 
 Requisitos:
+
 - Node.js 18+
 - npm
 
@@ -56,6 +59,7 @@ npm start
 ```
 
 App en local:
+
 - http://localhost:3000
 
 ## Build de produccion
@@ -70,32 +74,35 @@ npm run build
 Se usa un unico contenedor estatico (sin backend).
 
 ```bash
-cd /mnt/data/www/MovieFlix-demo
+cd <ruta-del-proyecto>/MovieFlix-demo
 chmod +x deploy/deploy-orangepi.sh
 ./deploy/deploy-orangepi.sh
 ```
 
 La guia completa esta en:
+
 - deploy/ORANGEPI-DEPLOY.md
 
 ## DNS DuckDNS (movie-demo)
 
 Script incluido:
+
 - deploy/duckdns-update-movie-demo.sh
 
 Uso recomendado (sin guardar token en repo):
 
 ```bash
-cd /mnt/data/www/MovieFlix-demo/deploy
+cd <ruta-del-proyecto>/MovieFlix-demo/deploy
 export DUCKDNS_TOKEN="<token>"
 export DUCKDNS_DOMAIN="movie-demo"
-export DUCKDNS_IP="80.102.148.90"
+export DUCKDNS_IP="<ip-publica-del-servidor>"
 ./duckdns-update-movie-demo.sh
 ```
 
 ## Seguridad
 
 Controles aplicados en despliegue:
+
 - Contenedor en red `traefik-public` con TLS por Traefik.
 - Middleware `security-headers@file` en router.
 - Root filesystem en solo lectura en `docker-compose.yml`.

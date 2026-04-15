@@ -248,3 +248,7 @@ ecosystem.demo.config.js
 
 # Documentación de demo con información sensible (mantener demo-mode.md)
 docs/demo-private.md
+
+# Backups locales de trabajo
+*.backup
+*_backup.js

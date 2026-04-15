@@ -327,7 +327,10 @@ const Series = ({ currentProfile, isDemoMode }) => {
                 key={serie.id}
                 className="group relative bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-all duration-300 hover:scale-105"
               >
-                <Link to={`/content/${serie.id}`} className="block relative aspect-[2/3]">
+                <Link
+                  to={`/content/${serie.id}`}
+                  className="block relative aspect-[2/3]"
+                >
                   <img
                     src={serie.poster_url}
                     alt={serie.title}

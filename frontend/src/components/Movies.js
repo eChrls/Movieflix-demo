@@ -79,14 +79,14 @@ const Movies = ({ currentProfile, isDemoMode }) => {
       filtered = filtered.filter(
         (movie) =>
           movie.title.toLowerCase().includes(searchTerm) ||
-          movie.description.toLowerCase().includes(searchTerm)
+          movie.description.toLowerCase().includes(searchTerm),
       );
     }
 
     // Platform filter
     if (filters.platform) {
       filtered = filtered.filter(
-        (movie) => movie.platform === filters.platform
+        (movie) => movie.platform === filters.platform,
       );
     }
 
@@ -138,15 +138,15 @@ const Movies = ({ currentProfile, isDemoMode }) => {
       const newStatus = currentStatus === "pending" ? "watched" : "pending";
       const response = await demoApiService.updateWatchStatus(
         movieId,
-        newStatus
+        newStatus,
       );
 
       if (response.success) {
         // Update local state
         setMovies((prev) =>
           prev.map((movie) =>
-            movie.id === movieId ? { ...movie, status: newStatus } : movie
-          )
+            movie.id === movieId ? { ...movie, status: newStatus } : movie,
+          ),
         );
       }
     } catch (err) {

@@ -1,5 +1,6 @@
-import { BarChart3, Clock, Edit2, Settings, Star, User, Save, X, Camera } from "lucide-react";
+import { BarChart3, Camera, Edit2, Save, Settings, X } from "lucide-react";
 import { useEffect, useState } from "react";
+import { STORAGE_KEYS } from "../data/demoData";
 
 const Profile = () => {
   const [profileData, setProfileData] = useState({
@@ -34,13 +35,27 @@ const Profile = () => {
   const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   const availableAvatars = [
-    "👤", "🎭", "🎬", "🍿", "🎪", "🎨", "🎵", "🎯", 
-    "🌟", "⭐", "🔥", "💎", "🚀", "🎲", "🎸", "📚"
+    "👤",
+    "🎭",
+    "🎬",
+    "🍿",
+    "🎪",
+    "🎨",
+    "🎵",
+    "🎯",
+    "🌟",
+    "⭐",
+    "🔥",
+    "💎",
+    "🚀",
+    "🎲",
+    "🎸",
+    "📚",
   ];
 
   useEffect(() => {
     // Cargar datos del perfil desde localStorage
-    const savedProfile = localStorage.getItem("movieflix_profile");
+    const savedProfile = localStorage.getItem(STORAGE_KEYS.CURRENT_PROFILE);
     if (savedProfile) {
       const parsed = JSON.parse(savedProfile);
       setProfileData((prev) => ({ ...prev, ...parsed }));
@@ -59,33 +74,40 @@ const Profile = () => {
   const calculateStats = () => {
     try {
       const watchedContent = JSON.parse(
-        localStorage.getItem("movieflix_watched") || "[]"
+        localStorage.getItem(STORAGE_KEYS.WATCHED_CONTENT) || "[]",
       );
-      
+
       const totalWatched = watchedContent.length;
-      const movies = watchedContent.filter(item => item.type === 'movie').length;
-      const series = watchedContent.filter(item => item.type === 'series').length;
-      
+      const movies = watchedContent.filter(
+        (item) => item.type === "movie",
+      ).length;
+      const series = watchedContent.filter(
+        (item) => item.type === "series",
+      ).length;
+
       // Calcular horas basado en duración promedio
       const totalMinutes = watchedContent.reduce((acc, item) => {
-        const duration = item.duration || (item.type === 'movie' ? 120 : 45);
+        const duration = item.duration || (item.type === "movie" ? 120 : 45);
         return acc + duration;
       }, 0);
       const totalHours = Math.round(totalMinutes / 60);
 
       // Género favorito
       const genreCount = {};
-      watchedContent.forEach(item => {
+      watchedContent.forEach((item) => {
         if (item.genre) {
           genreCount[item.genre] = (genreCount[item.genre] || 0) + 1;
         }
       });
-      
-      const favoriteGenre = Object.keys(genreCount).length > 0 
-        ? Object.keys(genreCount).reduce((a, b) => genreCount[a] > genreCount[b] ? a : b)
-        : "Sin datos";
 
-      setProfileData(prev => ({
+      const favoriteGenre =
+        Object.keys(genreCount).length > 0
+          ? Object.keys(genreCount).reduce((a, b) =>
+              genreCount[a] > genreCount[b] ? a : b,
+            )
+          : "Sin datos";
+
+      setProfileData((prev) => ({
         ...prev,
         stats: {
           totalWatched,
@@ -93,9 +115,8 @@ const Profile = () => {
           totalSeries: series,
           totalHours,
           favoriteGenre,
-        }
+        },
       }));
-
     } catch (error) {
       console.error("Error calculating stats:", error);
     }
@@ -109,9 +130,12 @@ const Profile = () => {
       email: editForm.email,
       bio: editForm.bio,
     };
-    
+
     setProfileData(updatedProfile);
-    localStorage.setItem("movieflix_profile", JSON.stringify(updatedProfile));
+    localStorage.setItem(
+      STORAGE_KEYS.CURRENT_PROFILE,
+      JSON.stringify(updatedProfile),
+    );
     setIsEditing(false);
     setShowAvatarPicker(false);
   };
@@ -133,10 +157,13 @@ const Profile = () => {
       preferences: {
         ...profileData.preferences,
         [key]: value,
-      }
+      },
     };
     setProfileData(updatedProfile);
-    localStorage.setItem("movieflix_profile", JSON.stringify(updatedProfile));
+    localStorage.setItem(
+      STORAGE_KEYS.CURRENT_PROFILE,
+      JSON.stringify(updatedProfile),
+    );
   };
 
   return (
@@ -166,7 +193,7 @@ const Profile = () => {
                         <Camera size={16} />
                       </div>
                     </button>
-                    
+
                     {showAvatarPicker && (
                       <div className="absolute top-full left-1/2 transform -translate-x-1/2 mt-2 bg-gray-700 rounded-lg p-4 shadow-lg z-10">
                         <div className="grid grid-cols-4 gap-2 max-w-xs">
@@ -174,7 +201,7 @@ const Profile = () => {
                             <button
                               key={avatar}
                               onClick={() => {
-                                setEditForm({...editForm, avatar});
+                                setEditForm({ ...editForm, avatar });
                                 setShowAvatarPicker(false);
                               }}
                               className="text-2xl p-2 rounded hover:bg-gray-600 transition-colors"
@@ -196,34 +223,46 @@ const Profile = () => {
               {isEditing ? (
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Nombre</label>
+                    <label className="block text-sm font-medium mb-2">
+                      Nombre
+                    </label>
                     <input
                       type="text"
                       value={editForm.name}
-                      onChange={(e) => setEditForm({...editForm, name: e.target.value})}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, name: e.target.value })
+                      }
                       className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Email</label>
+                    <label className="block text-sm font-medium mb-2">
+                      Email
+                    </label>
                     <input
                       type="email"
                       value={editForm.email}
-                      onChange={(e) => setEditForm({...editForm, email: e.target.value})}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, email: e.target.value })
+                      }
                       className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-2">Biografía</label>
+                    <label className="block text-sm font-medium mb-2">
+                      Biografía
+                    </label>
                     <textarea
                       value={editForm.bio}
-                      onChange={(e) => setEditForm({...editForm, bio: e.target.value})}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, bio: e.target.value })
+                      }
                       rows={3}
                       className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 resize-none"
                       placeholder="Cuéntanos sobre tus gustos cinematográficos..."
                     />
                   </div>
-                  
+
                   <div className="flex gap-2 pt-4">
                     <button
                       onClick={handleSave}
@@ -243,10 +282,14 @@ const Profile = () => {
                 </div>
               ) : (
                 <div className="text-center">
-                  <h2 className="text-2xl font-bold mb-2">{profileData.name}</h2>
+                  <h2 className="text-2xl font-bold mb-2">
+                    {profileData.name}
+                  </h2>
                   <p className="text-gray-400 mb-2">{profileData.email}</p>
-                  <p className="text-gray-300 text-sm mb-4 italic">{profileData.bio}</p>
-                  
+                  <p className="text-gray-300 text-sm mb-4 italic">
+                    {profileData.bio}
+                  </p>
+
                   <button
                     onClick={() => setIsEditing(true)}
                     className="bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded-lg font-semibold transition-colors flex items-center justify-center gap-2 mx-auto"
@@ -264,26 +307,36 @@ const Profile = () => {
                 <BarChart3 size={20} />
                 Estadísticas
               </h3>
-              
+
               <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-gray-400">Total visto:</span>
-                  <span className="font-bold">{profileData.stats.totalWatched}</span>
+                  <span className="font-bold">
+                    {profileData.stats.totalWatched}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Películas:</span>
-                  <span className="font-bold text-blue-400">{profileData.stats.totalMovies}</span>
+                  <span className="font-bold text-blue-400">
+                    {profileData.stats.totalMovies}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Series:</span>
-                  <span className="font-bold text-green-400">{profileData.stats.totalSeries}</span>
+                  <span className="font-bold text-green-400">
+                    {profileData.stats.totalSeries}
+                  </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-400">Horas totales:</span>
-                  <span className="font-bold text-yellow-400">{profileData.stats.totalHours}h</span>
+                  <span className="font-bold text-yellow-400">
+                    {profileData.stats.totalHours}h
+                  </span>
                 </div>
                 <div className="pt-2 border-t border-gray-700">
-                  <span className="text-gray-400 text-sm">Género favorito:</span>
+                  <span className="text-gray-400 text-sm">
+                    Género favorito:
+                  </span>
                   <div className="mt-1">
                     <span className="bg-purple-600/20 text-purple-300 px-2 py-1 rounded text-sm">
                       {profileData.stats.favoriteGenre}
@@ -301,30 +354,38 @@ const Profile = () => {
                 <Settings size={20} />
                 Preferencias de Usuario
               </h3>
-              
+
               <div className="space-y-6">
                 {/* Géneros favoritos */}
                 <div>
-                  <label className="block text-sm font-medium mb-3">Géneros Favoritos</label>
+                  <label className="block text-sm font-medium mb-3">
+                    Géneros Favoritos
+                  </label>
                   <div className="flex flex-wrap gap-2">
-                    {profileData.preferences.favoriteGenres.map((genre, index) => (
-                      <span
-                        key={index}
-                        className="bg-red-600/20 text-red-300 px-3 py-1 rounded-full text-sm border border-red-500/20"
-                      >
-                        {genre}
-                      </span>
-                    ))}
+                    {profileData.preferences.favoriteGenres.map(
+                      (genre, index) => (
+                        <span
+                          key={index}
+                          className="bg-red-600/20 text-red-300 px-3 py-1 rounded-full text-sm border border-red-500/20"
+                        >
+                          {genre}
+                        </span>
+                      ),
+                    )}
                   </div>
                 </div>
 
                 {/* Configuraciones */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium mb-2">Idioma preferido</label>
+                    <label className="block text-sm font-medium mb-2">
+                      Idioma preferido
+                    </label>
                     <select
                       value={profileData.preferences.preferredLanguage}
-                      onChange={(e) => updatePreference('preferredLanguage', e.target.value)}
+                      onChange={(e) =>
+                        updatePreference("preferredLanguage", e.target.value)
+                      }
                       className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                     >
                       <option value="es">Español</option>
@@ -334,10 +395,14 @@ const Profile = () => {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium mb-2">Calidad de video</label>
+                    <label className="block text-sm font-medium mb-2">
+                      Calidad de video
+                    </label>
                     <select
                       value={profileData.preferences.quality}
-                      onChange={(e) => updatePreference('quality', e.target.value)}
+                      onChange={(e) =>
+                        updatePreference("quality", e.target.value)
+                      }
                       className="w-full bg-gray-700 text-white px-3 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500"
                     >
                       <option value="4K">4K Ultra HD</option>
@@ -351,14 +416,20 @@ const Profile = () => {
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <span className="font-medium">Reproducción automática</span>
-                      <p className="text-sm text-gray-400">Reproduce automáticamente el siguiente episodio</p>
+                      <span className="font-medium">
+                        Reproducción automática
+                      </span>
+                      <p className="text-sm text-gray-400">
+                        Reproduce automáticamente el siguiente episodio
+                      </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={profileData.preferences.autoplay}
-                        onChange={(e) => updatePreference('autoplay', e.target.checked)}
+                        onChange={(e) =>
+                          updatePreference("autoplay", e.target.checked)
+                        }
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
@@ -368,13 +439,17 @@ const Profile = () => {
                   <div className="flex items-center justify-between">
                     <div>
                       <span className="font-medium">Notificaciones</span>
-                      <p className="text-sm text-gray-400">Recibe notificaciones de nuevos contenidos</p>
+                      <p className="text-sm text-gray-400">
+                        Recibe notificaciones de nuevos contenidos
+                      </p>
                     </div>
                     <label className="relative inline-flex items-center cursor-pointer">
                       <input
                         type="checkbox"
                         checked={profileData.preferences.notifications}
-                        onChange={(e) => updatePreference('notifications', e.target.checked)}
+                        onChange={(e) =>
+                          updatePreference("notifications", e.target.checked)
+                        }
                         className="sr-only peer"
                       />
                       <div className="w-11 h-6 bg-gray-600 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-red-600"></div>
@@ -387,8 +462,9 @@ const Profile = () => {
             {/* Información de demo */}
             <div className="bg-blue-900/20 border border-blue-500/20 rounded-lg p-4 mt-6">
               <p className="text-blue-200 text-sm">
-                <strong>💡 Demo:</strong> Los cambios en tu perfil se guardan en LocalStorage. 
-                Tus preferencias se mantendrán hasta que limpies los datos del navegador.
+                <strong>💡 Demo:</strong> Los cambios en tu perfil se guardan en
+                LocalStorage. Tus preferencias se mantendrán hasta que limpies
+                los datos del navegador.
               </p>
             </div>
           </div>

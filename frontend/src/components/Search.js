@@ -8,6 +8,7 @@ import {
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import demoApiService from "../services/demoApiService";
 import LoadingSpinner from "./LoadingSpinner";
 
@@ -107,7 +108,7 @@ const Search = () => {
       case "ArrowDown":
         e.preventDefault();
         setSelectedSuggestion((prev) =>
-          prev < suggestions.length - 1 ? prev + 1 : prev
+          prev < suggestions.length - 1 ? prev + 1 : prev,
         );
         break;
       case "ArrowUp":
@@ -138,9 +139,12 @@ const Search = () => {
   const addToMyList = async (suggestion, e) => {
     e.stopPropagation();
     try {
-      const response = await demoApiService.addContentFromSearch(suggestion);
+      const response = await demoApiService.addToWatched(
+        suggestion.id,
+        "pending",
+      );
       if (response.success) {
-        alert(`"${suggestion.title}" añadido a tu lista`);
+        alert(`"${suggestion.title}" añadido a pendientes`);
         loadLocalContent(); // Recargar contenido local
       } else {
         alert("Error al añadir contenido: " + response.message);
@@ -161,7 +165,9 @@ const Search = () => {
   const filteredLocalContent = localContent.filter((item) => {
     const matchesType = !filters.type || item.type === filters.type;
     const matchesGenre =
-      !filters.genre || (item.genres && item.genres.includes(filters.genre));
+      !filters.genre ||
+      item.genre === filters.genre ||
+      (Array.isArray(item.genres) && item.genres.includes(filters.genre));
     const matchesYear = !filters.year || item.year?.toString() === filters.year;
     const matchesSearch =
       !searchTerm ||
@@ -321,27 +327,31 @@ const Search = () => {
           <div className="content-grid">
             {filteredLocalContent.map((item) => (
               <div key={item.id} className="content-card">
-                <div className="card-poster">
-                  <img
-                    src={item.poster_url || item.poster_path}
-                    alt={item.title}
-                    onError={(e) => {
-                      e.target.src =
-                        "https://via.placeholder.com/200x300/333/fff?text=No+Image";
-                    }}
-                  />
-                  <div className="card-overlay">
-                    <div className="card-type">
-                      {item.type === "movie" ? (
-                        <Film size={16} />
-                      ) : (
-                        <Tv size={16} />
-                      )}
+                <Link to={`/content/${item.id}`} className="block">
+                  <div className="card-poster">
+                    <img
+                      src={item.poster_url || item.poster_path}
+                      alt={item.title}
+                      onError={(e) => {
+                        e.target.src =
+                          "https://via.placeholder.com/200x300/333/fff?text=No+Image";
+                      }}
+                    />
+                    <div className="card-overlay">
+                      <div className="card-type">
+                        {item.type === "movie" ? (
+                          <Film size={16} />
+                        ) : (
+                          <Tv size={16} />
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </Link>
                 <div className="card-info">
-                  <h4>{item.title}</h4>
+                  <h4>
+                    <Link to={`/content/${item.id}`}>{item.title}</Link>
+                  </h4>
                   <div className="card-meta">
                     <span className="card-rating">
                       <Star size={12} fill="currentColor" />

@@ -8,6 +8,7 @@ import {
   Star,
 } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import demoApiService from "../services/demoApiService";
 import LoadingSpinner from "./LoadingSpinner";
 
@@ -295,22 +296,26 @@ const Movies = ({ currentProfile, isDemoMode }) => {
         ) : (
           filteredMovies.map((movie) => (
             <div key={movie.id} className="movie-card">
-              <div className="movie-poster">
-                <img
-                  src={movie.poster_url}
-                  alt={movie.title}
-                  onError={(e) => {
-                    e.target.src =
-                      "https://via.placeholder.com/300x450/333/fff?text=No+Image";
-                  }}
-                />
-                <div className="poster-overlay">
-                  <Play size={24} />
+              <Link to={`/content/${movie.id}`} className="block">
+                <div className="movie-poster">
+                  <img
+                    src={movie.poster_url}
+                    alt={movie.title}
+                    onError={(e) => {
+                      e.target.src =
+                        "https://via.placeholder.com/300x450/333/fff?text=No+Image";
+                    }}
+                  />
+                  <div className="poster-overlay">
+                    <Play size={24} />
+                  </div>
                 </div>
-              </div>
+              </Link>
 
               <div className="movie-info">
-                <h3 className="movie-title">{movie.title}</h3>
+                <h3 className="movie-title">
+                  <Link to={`/content/${movie.id}`}>{movie.title}</Link>
+                </h3>
 
                 <div className="movie-meta">
                   <div className="movie-rating">

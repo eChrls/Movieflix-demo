@@ -105,6 +105,15 @@ function App() {
     }
   };
 
+  const handleResetDemo = async () => {
+    try {
+      demoApiService.resetDemoData();
+      await initializeApp();
+    } catch (err) {
+      console.error("Error reiniciando demo:", err);
+    }
+  };
+
   // Loading state
   if (loading) {
     return <LoadingSpinner />;
@@ -135,7 +144,7 @@ function App() {
       <Router>
         <div className="App min-h-screen bg-gray-900">
           {/* Demo Info Banner */}
-          <DemoInfo />
+          <DemoInfo onResetDemo={handleResetDemo} />
 
           {/* Navigation */}
           <Navigation
@@ -143,6 +152,7 @@ function App() {
             profiles={profiles}
             onProfileChange={handleProfileChange}
             onCreateProfile={handleCreateProfile}
+            isDemoMode={isDemoMode}
           />
 
           {/* Main Content */}
@@ -151,16 +161,52 @@ function App() {
             {/* Padding top for fixed navigation */}
             <Routes>
               {/* Home Route */}
-              <Route path="/" element={<Home />} />
+              <Route
+                path="/"
+                element={
+                  <Home
+                    currentProfile={currentProfile}
+                    isDemoMode={isDemoMode}
+                  />
+                }
+              />
 
               {/* Movies Route */}
-              <Route path="/movies" element={<Movies />} />
+              <Route
+                path="/movies"
+                element={
+                  <Movies
+                    currentProfile={currentProfile}
+                    isDemoMode={isDemoMode}
+                  />
+                }
+              />
 
               {/* Series Route */}
-              <Route path="/series" element={<Series />} />
+              <Route
+                path="/series"
+                element={
+                  <Series
+                    currentProfile={currentProfile}
+                    isDemoMode={isDemoMode}
+                  />
+                }
+              />
 
               {/* My List Route */}
-              <Route path="/mylist" element={<MyList />} />
+              <Route
+                path="/my-list"
+                element={
+                  <MyList
+                    currentProfile={currentProfile}
+                    isDemoMode={isDemoMode}
+                  />
+                }
+              />
+              <Route
+                path="/mylist"
+                element={<Navigate to="/my-list" replace />}
+              />
 
               {/* Profile Route */}
               <Route path="/profile" element={<Profile />} />

@@ -1,0 +1,30 @@
+services:
+  movie-demo:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: movie-demo
+    restart: unless-stopped
+    networks:
+      - traefik-public
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik-public
+      - traefik.http.routers.movie-demo.rule=Host(`movie-demo.duckdns.org`)
+      - traefik.http.routers.movie-demo.entrypoints=websecure
+      - traefik.http.routers.movie-demo.tls=true
+      - traefik.http.routers.movie-demo.tls.certresolver=letsencrypt
+      - traefik.http.routers.movie-demo.middlewares=security-headers@file
+      - traefik.http.services.movie-demo.loadbalancer.server.port=80
+      - traefik.http.services.movie-demo.loadbalancer.passhostheader=true
+
+networks:
+  traefik-public:
+    external: true

@@ -1,5 +1,6 @@
 import { Calendar, Clock, Filter, Search, Star, Tv } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import demoApiService from "../services/demoApiService";
 import LoadingSpinner from "./LoadingSpinner";
 
@@ -75,14 +76,14 @@ const Series = ({ currentProfile, isDemoMode }) => {
         (serie) =>
           (serie.title && serie.title.toLowerCase().includes(searchTerm)) ||
           (serie.description &&
-            serie.description.toLowerCase().includes(searchTerm))
+            serie.description.toLowerCase().includes(searchTerm)),
       );
     }
 
     // Platform filter
     if (filters.platform) {
       filtered = filtered.filter(
-        (serie) => serie.platform === filters.platform
+        (serie) => serie.platform === filters.platform,
       );
     }
 
@@ -237,8 +238,11 @@ const Series = ({ currentProfile, isDemoMode }) => {
                   >
                     <option value="">Todas las plataformas</option>
                     {platforms.map((platform) => (
-                      <option key={platform} value={platform}>
-                        {platform}
+                      <option
+                        key={platform.id || platform.name || platform}
+                        value={platform.name || platform}
+                      >
+                        {platform.name || platform}
                       </option>
                     ))}
                   </select>
@@ -258,8 +262,11 @@ const Series = ({ currentProfile, isDemoMode }) => {
                   >
                     <option value="">Todos los géneros</option>
                     {genres.map((genre) => (
-                      <option key={genre} value={genre}>
-                        {genre}
+                      <option
+                        key={genre.id || genre.name || genre}
+                        value={genre.name || genre}
+                      >
+                        {genre.name || genre}
                       </option>
                     ))}
                   </select>
@@ -320,7 +327,7 @@ const Series = ({ currentProfile, isDemoMode }) => {
                 key={serie.id}
                 className="group relative bg-gray-800 rounded-lg overflow-hidden hover:bg-gray-750 transition-all duration-300 hover:scale-105"
               >
-                <div className="relative aspect-[2/3]">
+                <Link to={`/content/${serie.id}`} className="block relative aspect-[2/3]">
                   <img
                     src={serie.poster_url}
                     alt={serie.title}
@@ -341,12 +348,12 @@ const Series = ({ currentProfile, isDemoMode }) => {
                       <Clock size={16} />
                     </button>
                   </div>
-                </div>
+                </Link>
 
                 {/* Info section */}
                 <div className="p-4">
                   <h3 className="font-bold text-sm mb-2 line-clamp-2">
-                    {serie.title}
+                    <Link to={`/content/${serie.id}`}>{serie.title}</Link>
                   </h3>
                   <div className="flex items-center justify-between text-xs text-gray-400 mb-2">
                     <span className="flex items-center gap-1">

@@ -1,7 +1,7 @@
 import { AlertTriangle, Info, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
 
-const DemoInfo = ({ onResetDemo }) => {
+const DemoInfo = ({ onResetDemo = () => {} }) => {
   const [showInfo, setShowInfo] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
 

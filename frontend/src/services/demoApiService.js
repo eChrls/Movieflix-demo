@@ -66,6 +66,31 @@ class DemoApiService {
     };
   }
 
+  async createProfile(profileData) {
+    await this.delay();
+    const data = getDemoData();
+
+    const nextId =
+      Math.max(0, ...data.profiles.map((profile) => Number(profile.id) || 0)) +
+      1;
+
+    const newProfile = {
+      id: nextId,
+      name: profileData?.name || `Perfil ${nextId}`,
+      avatar: profileData?.avatar || "👤",
+      isDefault: false,
+      created_at: new Date().toISOString(),
+    };
+
+    const updatedProfiles = [...data.profiles, newProfile];
+    saveDemoData(STORAGE_KEYS.PROFILES, updatedProfiles);
+
+    return {
+      success: true,
+      data: newProfile,
+    };
+  }
+
   // Content API
   async getContent(filters = {}) {
     await this.delay();
@@ -94,7 +119,7 @@ class DemoApiService {
       content = content.filter(
         (item) =>
           item.title.toLowerCase().includes(searchTerm) ||
-          item.description.toLowerCase().includes(searchTerm)
+          item.description.toLowerCase().includes(searchTerm),
       );
     }
 
@@ -169,12 +194,12 @@ class DemoApiService {
       ...content,
       watched_status: status,
       watched_date: new Date().toISOString(),
-      profile_id: data.currentProfile.id,
+      profile_id: data.currentProfile?.id || 1,
     };
 
     // Remove if already exists
     const filteredWatched = data.watchedContent.filter(
-      (item) => item.id !== contentId
+      (item) => item.id !== contentId,
     );
     const updatedWatched = [...filteredWatched, watchedItem];
 
@@ -182,7 +207,7 @@ class DemoApiService {
 
     // Update content status
     const updatedContent = data.content.map((item) =>
-      item.id === contentId ? { ...item, status } : item
+      item.id === contentId ? { ...item, status } : item,
     );
     saveDemoData(STORAGE_KEYS.CONTENT, updatedContent);
 
@@ -197,13 +222,13 @@ class DemoApiService {
     const data = getDemoData();
 
     const updatedWatched = data.watchedContent.filter(
-      (item) => item.id !== contentId
+      (item) => item.id !== contentId,
     );
     saveDemoData(STORAGE_KEYS.WATCHED_CONTENT, updatedWatched);
 
     // Update content status to pending
     const updatedContent = data.content.map((item) =>
-      item.id === contentId ? { ...item, status: "pending" } : item
+      item.id === contentId ? { ...item, status: "pending" } : item,
     );
     saveDemoData(STORAGE_KEYS.CONTENT, updatedContent);
 
@@ -346,7 +371,7 @@ class DemoApiService {
     try {
       const data = getDemoData();
       const updatedContent = data.content.filter(
-        (item) => item.id !== contentId
+        (item) => item.id !== contentId,
       );
       saveDemoData(STORAGE_KEYS.CONTENT, updatedContent);
 
@@ -378,7 +403,7 @@ class DemoApiService {
 
       // Remove from pending content
       const updatedContent = data.content.filter(
-        (item) => item.id !== contentId
+        (item) => item.id !== contentId,
       );
       saveDemoData(STORAGE_KEYS.CONTENT, updatedContent);
 
@@ -411,7 +436,7 @@ class DemoApiService {
     try {
       const data = getDemoData();
       const contentIndex = data.content.findIndex(
-        (item) => item.id === contentId
+        (item) => item.id === contentId,
       );
 
       if (contentIndex === -1) {
@@ -442,7 +467,7 @@ class DemoApiService {
     }
   }
 
-  // Search content using TMDB API
+  // Search only in local catalog (static demo, no external API)
   async searchContent(query) {
     await this.delay(100);
 
@@ -453,64 +478,35 @@ class DemoApiService {
       };
     }
 
-    try {
-      // Use TMDB search endpoint
-      const response = await fetch(
-        `https://api.themoviedb.org/3/search/multi?query=${encodeURIComponent(
-          query
-        )}&api_key=a2e351c494039319d6d537923a7d972a&language=es-ES`
-      );
+    const data = getDemoData();
+    const normalizedQuery = query.trim().toLowerCase();
 
-      if (!response.ok) {
-        throw new Error("Error en la búsqueda");
-      }
-
-      const tmdbData = await response.json();
-
-      // Transform TMDB data to our format
-      const transformedResults = tmdbData.results.slice(0, 10).map((item) => ({
-        id: `tmdb_${item.id}`,
-        title: item.title || item.name,
-        title_en: item.original_title || item.original_name,
-        year: new Date(
-          item.release_date || item.first_air_date || "2024"
-        ).getFullYear(),
-        type: item.media_type === "tv" ? "series" : "movie",
-        rating: item.vote_average ? item.vote_average.toFixed(1) : "7.0",
-        runtime: item.media_type === "tv" ? "45" : "120",
-        seasons: item.media_type === "tv" ? item.number_of_seasons || 1 : null,
-        genres: item.genre_ids
-          ? item.genre_ids.slice(0, 3).map((id) => this.getGenreNameById(id))
-          : [],
-        overview: item.overview || "Descripción no disponible",
-        poster_path: item.poster_path
-          ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
-          : null,
-        poster_url: item.poster_path
-          ? `https://image.tmdb.org/t/p/w500${item.poster_path}`
-          : "https://via.placeholder.com/200x300/333/fff?text=No+Image",
-        backdrop_path: item.backdrop_path
-          ? `https://image.tmdb.org/t/p/w1280${item.backdrop_path}`
-          : null,
-        imdb_id: null,
-        tmdb_id: item.id,
-        platform_id: "",
-        popularity: item.popularity,
-        vote_count: item.vote_count,
+    const results = data.content
+      .filter((item) => {
+        const title = (item.title || "").toLowerCase();
+        const description = (
+          item.description ||
+          item.overview ||
+          ""
+        ).toLowerCase();
+        const genre = (item.genre || "").toLowerCase();
+        return (
+          title.includes(normalizedQuery) ||
+          description.includes(normalizedQuery) ||
+          genre.includes(normalizedQuery)
+        );
+      })
+      .slice(0, 12)
+      .map((item) => ({
+        ...item,
+        overview:
+          item.description || item.overview || "Descripción no disponible",
       }));
 
-      return {
-        success: true,
-        data: transformedResults,
-      };
-    } catch (error) {
-      console.error("Search error:", error);
-      return {
-        success: false,
-        message: "Error al buscar contenido: " + error.message,
-        data: [],
-      };
-    }
+    return {
+      success: true,
+      data: results,
+    };
   }
 
   // Helper function to get genre name by ID
@@ -553,13 +549,20 @@ class DemoApiService {
     try {
       const data = getDemoData();
 
+      if (data.content.some((item) => item.title === searchResult.title)) {
+        return {
+          success: false,
+          message: "Este contenido ya existe en el catálogo local",
+        };
+      }
+
       // Generate new ID
       const newId =
         Math.max(...data.content.map((item) => parseInt(item.id) || 0), 0) + 1;
 
       const newContent = {
         ...searchResult,
-        id: newId.toString(),
+        id: newId,
         createdAt: new Date().toISOString(),
         status: "pending",
       };
